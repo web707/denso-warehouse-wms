@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { SLOTS_PER_RACK, slotCode, slotPosition, summarizeRack, zoneShort } from '@/lib/warehouse';
 import { useNavigate } from 'react-router-dom';
 import {
   Boxes,
@@ -48,8 +49,6 @@ const STATUS_LABEL = {
   overload: 'Quá tải',
 };
 
-const slotCode = (i) => `S${String(i + 1).padStart(2, '0')}`;
-const zoneShort = (zoneCode) => String(zoneCode || 'ZONE-A').replace(/^ZONE-/i, '');
 const safeText = (value) => String(value || '').trim();
 
 function placementWeight(placement, partsById) {
@@ -92,7 +91,7 @@ function LabelCard({ item, selected, onToggle, onPreview }) {
       {selected ? <CheckSquare2 className="w-4 h-4 text-indigo-600" /> : <Square className="w-4 h-4 text-slate-400" />}
     </button>
     <div className="flex justify-center"><QRCodeSVG value={item.qrValue} size={92} /></div>
-    <div className="font-black text-center mt-2 truncate">{item.title}</div>
+    <div className="font-bold text-center mt-2 truncate">{item.title}</div>
     <div className="text-[10px] text-center text-slate-500 truncate">{item.subtitle}</div>
     <div className="mx-auto overflow-hidden max-w-[150px] mt-1"><Barcode value={item.barcodeValue} height={20} width={0.85} displayValue={false} margin={0} /></div>
     {item.status && <div className="mt-2 flex items-center justify-center gap-1.5 text-[10px] font-semibold" style={{ color: meta.color }}><span className="w-2 h-2 rounded-full" style={{ background: meta.color }} />{meta.label}</div>}
@@ -111,7 +110,7 @@ function PrintableLabel({ item, preset, pdfKey }) {
       <QRCodeSVG value={item.qrValue} size={narrow ? 70 : 92} />
       <div className="min-w-0 flex-1">
         <div className="text-[7px] uppercase tracking-wide text-slate-400">{item.kindLabel}</div>
-        <div className={`${narrow ? 'text-sm' : 'text-lg'} font-black leading-tight truncate`}>{item.title}</div>
+        <div className={`${narrow ? 'text-sm' : 'text-lg'} font-bold leading-tight truncate`}>{item.title}</div>
         <div className="text-[8px] text-slate-500 truncate">{item.subtitle}</div>
         {item.detail && <div className="text-[7px] text-slate-600 mt-0.5 line-clamp-2">{item.detail}</div>}
         <div className="overflow-hidden mt-1"><Barcode value={item.barcodeValue} height={narrow ? 15 : 22} width={0.75} displayValue={false} margin={0} /></div>
@@ -175,7 +174,7 @@ export default function QRLabels() {
 
   const layout = useMemo(() => buildRackLayout(plan?.placements || []), [plan]);
 
-  const slotItems = useMemo(() => Array.from({ length: 20 }, (_, index) => {
+  const slotItems = useMemo(() => Array.from({ length: SLOTS_PER_RACK }, (_, index) => {
     const code = slotCode(index);
     const layoutSlot = layout.slots.find((s) => s.index === index);
     const placementIds = [...new Set((layoutSlot?.placements || []).map((p) => p.partId))];
@@ -196,7 +195,7 @@ export default function QRLabels() {
       barcodeValue: fullCode,
       qrValue: `${publicBase}/locations/${rackId}/${code}`,
       status: load,
-      level: Math.floor(index / 5) + 1,
+      level: slotPosition(index).level,
       index,
       weightKg,
       cartonCount,
@@ -207,12 +206,13 @@ export default function QRLabels() {
   }), [layout.slots, rackParts, partsById, rack, rackId, publicBase, zoneCode]);
 
   const rackItems = useMemo(() => zoneRacks.map((r) => {
-    const rp = parts.filter((p) => p.rackId === r.id);
-    const usedSlots = new Set(rp.filter((p) => Number.isInteger(p.preferredRackSlot)).map((p) => p.preferredRackSlot)).size || Math.min(20, rp.length);
-    const weightKg = rp.reduce((s, p) => s + Number(p.weight || 0), 0);
-    const st = usedSlots === 0 ? 'empty' : loadStatus(weightKg, Math.min(Number(r.maxWeight || RACK_SAFETY.rackMaxKg), RACK_SAFETY.rackMaxKg));
+    const sum = summarizeRack(r, parts);
+    const rp = sum.parts;
+    const usedSlots = sum.usedSlots;
+    const weightKg = sum.totalWeight;
+    const st = sum.status;
     const code = `${zoneShort(r.zoneCode)}-${r.name}`;
-    return { key: `rack:${r.id}`, kind: 'rack', kindLabel: 'Kệ kho', title: r.name, subtitle: `${r.warehouseCode} / ${r.zoneCode}`, code, barcodeValue: code, qrValue: `${publicBase}/racks/${r.id}/plan`, status: st, detail: `${usedSlots}/20 ô · ${rp.length} PART · ${weightKg.toLocaleString('vi-VN')} kg`, rack: r };
+    return { key: `rack:${r.id}`, kind: 'rack', kindLabel: 'Kệ kho', title: r.name, subtitle: `${r.warehouseCode} / ${r.zoneCode}`, code, barcodeValue: code, qrValue: `${publicBase}/racks/${r.id}/plan`, status: st, detail: `${usedSlots}/${SLOTS_PER_RACK} ô · ${rp.length} PART · ${weightKg.toLocaleString('vi-VN')} kg`, rack: r };
   }), [zoneRacks, parts, publicBase]);
 
   const zoneItems = useMemo(() => (zones.length ? zones : [...new Set(racks.map((r) => r.zoneCode))].filter(Boolean).map((code) => ({ code, name: code }))).map((z) => {
@@ -250,12 +250,10 @@ export default function QRLabels() {
 
   const preview = filteredItems.find((i) => i.key === previewKey) || filteredItems[0] || null;
   const selectedItems = filteredItems.filter((i) => selected.has(i.key));
-  const usedSlotsInZone = useMemo(() => {
-    const rackIds = new Set(zoneRacks.map((r) => r.id));
-    const used = new Set();
-    parts.filter((p) => rackIds.has(p.rackId)).forEach((p) => { if (Number.isInteger(p.preferredRackSlot)) used.add(`${p.rackId}:${p.preferredRackSlot}`); });
-    return used.size;
-  }, [zoneRacks, parts]);
+  const usedSlotsInZone = useMemo(
+    () => zoneRacks.reduce((sum, r) => sum + summarizeRack(r, parts).usedSlots, 0),
+    [zoneRacks, parts],
+  );
 
   const toggleSelected = (key) => setSelected((prev) => { const next = new Set(prev); if (next.has(key)) next.delete(key); else next.add(key); return next; });
   const selectAll = () => setSelected(new Set(filteredItems.map((i) => i.key)));
@@ -300,9 +298,9 @@ export default function QRLabels() {
     } finally { setExporting(false); }
   };
 
-  return <div className="p-6 lg:p-8 max-w-[1550px] mx-auto space-y-5">
+  return <div className="p-4 sm:p-6 md:p-8 max-w-[1550px] mx-auto space-y-5">
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><h1 className="text-2xl font-bold">QR & Barcode kho</h1><p className="text-sm text-slate-500 mt-1">Quản lý nhãn Zone → Kệ → Ô → PART. Quét QR để mở đúng vị trí và thao tác kho nhanh.</p></div>
+      <div><h1 className="text-2xl font-semibold">QR & Barcode kho</h1><p className="text-sm text-slate-500 mt-1">Quản lý nhãn Zone → Kệ → Ô → PART. Quét QR để mở đúng vị trí và thao tác kho nhanh.</p></div>
       <div className="flex gap-2 print:hidden"><Button variant="outline" onClick={handleExportPdf} disabled={exporting}>{exporting ? <Download className="w-4 h-4 mr-2 animate-pulse" /> : <FileDown className="w-4 h-4 mr-2" />}Xuất PDF</Button><Button onClick={handlePrint}><Printer className="w-4 h-4 mr-2" />In nhãn</Button></div>
     </div>
 
@@ -310,14 +308,14 @@ export default function QRLabels() {
 
     <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 print:hidden">
       <MiniStat icon={Warehouse} label="Kệ trong Zone" value={zoneRacks.length} sub={`${zoneCode} · tối đa 20 kệ`} />
-      <MiniStat icon={Boxes} label="Ô đang dùng" value={usedSlotsInZone} sub={`${Math.max(0, zoneRacks.length * 20 - usedSlotsInZone)} ô còn trống`} />
+      <MiniStat icon={Boxes} label="Ô đang dùng" value={usedSlotsInZone} sub={`${Math.max(0, zoneRacks.length * SLOTS_PER_RACK - usedSlotsInZone)} ô còn trống`} />
       <MiniStat icon={Package} label="PART trong Zone" value={parts.filter((p) => zoneRacks.some((r) => r.id === p.rackId)).length} />
       <MiniStat icon={QrCode} label="Nhãn đang chọn" value={selectedItems.length} sub={`${filteredItems.length} nhãn đang hiển thị`} />
       <MiniStat icon={Printer} label="Đã in / xuất" value={printedCount} sub="Trên trình duyệt này" />
     </div>
 
     <div id="qr-center-controls" className="print:hidden rounded-2xl border bg-white p-4 space-y-4">
-      <div className="flex flex-wrap gap-2">{TYPES.map((t) => <button key={t.value} type="button" onClick={() => setType(t.value)} className={`h-10 px-4 rounded-lg border text-sm font-semibold flex items-center gap-2 ${type === t.value ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600'}`}><t.icon className="w-4 h-4" />{t.label}</button>)}</div>
+      <div className="flex flex-wrap gap-2">{TYPES.map((t) => <button key={t.value} type="button" onClick={() => setType(t.value)} className={`h-10 px-4 rounded-lg border text-sm font-semibold flex items-center gap-2 ${type === t.value ? 'bg-primary text-primary-foreground border-primary' : 'bg-white text-slate-600'}`}><t.icon className="w-4 h-4" />{t.label}</button>)}</div>
       <div className="grid md:grid-cols-2 xl:grid-cols-6 gap-3 items-end">
         <label className="text-xs text-slate-500">Zone<select className="mt-1 w-full h-10 rounded-md border px-3 bg-white" value={zoneCode} onChange={(e) => setZoneCode(e.target.value)}>{(zones.length ? zones : [...new Set(racks.map((r) => r.zoneCode))].filter(Boolean).map((code) => ({ code, name: code }))).map((z) => <option key={z.code} value={z.code}>{z.code} · {z.name}</option>)}</select></label>
         <label className="text-xs text-slate-500">Kệ<select className="mt-1 w-full h-10 rounded-md border px-3 bg-white" value={rackId} onChange={(e) => setRackId(e.target.value)} disabled={type === 'zone'}><option value="">Tất cả kệ</option>{zoneRacks.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
@@ -337,7 +335,7 @@ export default function QRLabels() {
         {!preview ? <div className="h-[450px] flex items-center justify-center text-center text-slate-400">Chọn một nhãn để xem trước.</div> : <>
           <div className="text-xs uppercase tracking-wide text-slate-400">Xem trước nhãn</div>
           <div className="mt-3 flex justify-center"><QRCodeSVG value={preview.qrValue} size={180} /></div>
-          <div className="text-2xl font-black text-center mt-4">{preview.title}</div>
+          <div className="text-2xl font-semibold text-center mt-4">{preview.title}</div>
           <div className="text-xs text-center text-slate-500 mt-1">{preview.subtitle}</div>
           <div className="mt-3 overflow-hidden flex justify-center"><Barcode value={preview.barcodeValue} height={34} width={1.15} displayValue={false} /></div>
           <div className="mt-4 rounded-xl bg-slate-50 border p-3 text-sm"><div className="font-semibold">{preview.detail || 'Nhãn vị trí kho'}</div><div className="text-xs text-slate-400 font-mono break-all mt-2">{preview.code}</div>{preview.status && <div className="mt-2 flex items-center gap-2 text-xs font-semibold" style={{ color: statusDot(preview.status) }}><span className="w-2.5 h-2.5 rounded-full" style={{ background: statusDot(preview.status) }} />{STATUS_LABEL[preview.status]}</div>}</div>

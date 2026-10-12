@@ -64,7 +64,7 @@ export default function RackAllocation() {
 
   if (!order) {
     return (
-      <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-4">
+      <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto space-y-4">
         <Button variant="ghost" size="sm" onClick={() => navigate('/racks')} className="-ml-2">
           <ArrowLeft className="w-4 h-4 mr-1.5" /> Tất cả đơn hàng
         </Button>
@@ -74,14 +74,14 @@ export default function RackAllocation() {
   }
 
   return (
-    <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-5">
+    <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto space-y-5">
       <Button variant="ghost" size="sm" onClick={() => navigate('/racks')} className="-ml-2">
         <ArrowLeft className="w-4 h-4 mr-1.5" /> Tất cả đơn hàng
       </Button>
 
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">{order.name || order.orderNumber}</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">{order.name || order.orderNumber}</h1>
           <p className="text-sm text-slate-500 mt-1">Theo dõi mức độ sử dụng ô kệ, CBM và trọng lượng</p>
         </div>
         <div className="flex gap-2">

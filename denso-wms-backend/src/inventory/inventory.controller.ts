@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { CreateInventoryTransactionDto } from './dto/create-inventory-transaction.dto';
+import { QueryHeatmapDto } from './dto/query-heatmap.dto';
 import { InventoryTransactionType } from './entities/inventory-transaction.entity';
 import { InventoryService } from './inventory.service';
 
@@ -27,5 +28,10 @@ export class InventoryController {
   @Post('transactions')
   create(@Body() dto: CreateInventoryTransactionDto, @CurrentUser() user: AuthenticatedUser) {
     return this.service.create(dto, user);
+  }
+
+  @Get('heatmap')
+  getHeatmap(@Query() query: QueryHeatmapDto) {
+    return this.service.getHeatmap(query);
   }
 }

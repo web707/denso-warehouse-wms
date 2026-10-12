@@ -8,9 +8,9 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/components/ui/use-toast';
+import { RACKS_PER_ZONE, WAREHOUSE_CODE, summarizeZone } from '@/lib/warehouse';
 
-const TARGET_RACKS = 20;
-const SLOTS_PER_RACK = 20;
+const TARGET_RACKS = RACKS_PER_ZONE;
 
 export default function Zones() {
   const { orders, parts, racks, rackTypes, currentOrderId, initializeWarehouse } = useStore();
@@ -31,16 +31,10 @@ export default function Zones() {
   );
 
   const summaries = useMemo(() => zones.map((zone) => {
-    const zoneRacks = racks.filter((r) => (r.warehouseCode || 'DENSO-WH') === zone.warehouseCode && (r.zoneCode || 'ZONE-A') === zone.code);
-    const rackIds = new Set(zoneRacks.map((r) => r.id));
-    const zoneParts = parts.filter((p) => rackIds.has(p.rackId));
-    const usedRacks = new Set(zoneParts.map((p) => p.rackId).filter(Boolean)).size;
-    const explicitSlots = new Set(zoneParts
-      .filter((p) => p.rackId && Number.isInteger(p.preferredRackSlot))
-      .map((p) => `${p.rackId}:${p.preferredRackSlot}`));
-    const usedSlots = explicitSlots.size > 0 ? explicitSlots.size : Math.min(zoneParts.length, zoneRacks.length * SLOTS_PER_RACK);
-    const weight = zoneParts.reduce((s, p) => s + (Number(p.weight) || 0), 0);
-    return { zone, zoneRacks, zoneParts, usedRacks, usedSlots, weight };
+    const sum = summarizeZone(zone.code, racks.filter((r) => (r.warehouseCode || WAREHOUSE_CODE) === zone.warehouseCode), parts);
+    const zoneRacks = sum.racks.map((r) => r.rack);
+    const zoneParts = sum.racks.flatMap((r) => r.parts);
+    return { zone, zoneRacks, zoneParts, usedRacks: sum.usedRacks, usedSlots: sum.usedSlots, weight: sum.totalWeight };
   }), [zones, racks, parts]);
 
   const createZone = async () => {
@@ -89,10 +83,10 @@ export default function Zones() {
   };
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Quản lý Zone</h1>
+          <h1 className="text-2xl font-semibold">Quản lý Zone</h1>
           <p className="text-sm text-slate-500 mt-1">Mỗi Zone là một khu kho độc lập, có mô hình 3D và tối đa 20 kệ riêng (400 ô/Zone).</p>
         </div>
         <Badge variant="outline" className="bg-white gap-1.5"><Warehouse className="w-3.5 h-3.5" /> DENSO-WH</Badge>
@@ -107,16 +101,16 @@ export default function Zones() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="text-xs text-slate-400">{zone.warehouseCode}</div>
-                  <div className="font-black text-xl">{zone.code}</div>
+                  <div className="font-bold text-xl">{zone.code}</div>
                   <div className="text-sm text-slate-600">{zone.name}</div>
                 </div>
                 <div className="w-11 h-11 rounded-xl bg-indigo-50 flex items-center justify-center"><MapPinned className="w-6 h-6 text-indigo-500" /></div>
               </div>
 
               <div className="grid grid-cols-3 gap-2 mt-5 text-center">
-                <div className="rounded-xl bg-slate-50 border p-2"><div className="font-black text-lg">{zoneRacks.length}/20</div><div className="text-[10px] text-slate-500">Kệ vật lý</div></div>
-                <div className="rounded-xl bg-slate-50 border p-2"><div className="font-black text-lg">{usedRacks}</div><div className="text-[10px] text-slate-500">Kệ có hàng</div></div>
-                <div className="rounded-xl bg-slate-50 border p-2"><div className="font-black text-lg">{usedSlots}</div><div className="text-[10px] text-slate-500">Ô đang dùng</div></div>
+                <div className="rounded-xl bg-slate-50 border p-2"><div className="font-bold text-lg">{zoneRacks.length}/20</div><div className="text-[10px] text-slate-500">Kệ vật lý</div></div>
+                <div className="rounded-xl bg-slate-50 border p-2"><div className="font-bold text-lg">{usedRacks}</div><div className="text-[10px] text-slate-500">Kệ có hàng</div></div>
+                <div className="rounded-xl bg-slate-50 border p-2"><div className="font-bold text-lg">{usedSlots}</div><div className="text-[10px] text-slate-500">Ô đang dùng</div></div>
               </div>
 
               <div className="mt-4 space-y-1.5">

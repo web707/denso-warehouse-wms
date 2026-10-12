@@ -1,24 +1,6 @@
 import { request, raw } from './client';
-import { clearTokens, setTokens } from './tokens';
 
 export const api = {
-  auth: {
-    async register(email, password, fullName) {
-      const data = await request('/auth/register', { method: 'POST', body: { email, password, fullName }, skipAuth: true });
-      setTokens(data);
-      return data;
-    },
-    async login(email, password) {
-      const data = await request('/auth/login', { method: 'POST', body: { email, password }, skipAuth: true });
-      setTokens(data);
-      return data;
-    },
-    me: () => request('/auth/me'),
-    logout: () => clearTokens(),
-    forgotPassword: (email) => request('/auth/forgot-password', { method: 'POST', body: { email }, skipAuth: true }),
-    resetPassword: (token, newPassword) => request('/auth/reset-password', { method: 'POST', body: { token, newPassword }, skipAuth: true }),
-  },
-
   divisions: { list: () => request('/divisions') },
   rackTypes: { list: () => request('/rack-types') },
 
@@ -80,6 +62,34 @@ export const api = {
   inventory: {
     list: (params = {}) => { const qs = new URLSearchParams(params).toString(); return request(`/inventory/transactions${qs ? `?${qs}` : ''}`); },
     create: (body) => request('/inventory/transactions', { method: 'POST', body }),
+    heatmap: (params = {}) => { const qs = new URLSearchParams(params).toString(); return request(`/inventory/heatmap${qs ? `?${qs}` : ''}`); },
+  },
+
+  workOrders: {
+    list: (params = {}) => { const qs = new URLSearchParams(params).toString(); return request(`/work-orders${qs ? `?${qs}` : ''}`); },
+    create: (body) => request('/work-orders', { method: 'POST', body }),
+    update: (id, body) => request(`/work-orders/${id}`, { method: 'PATCH', body }),
+    remove: (id) => request(`/work-orders/${id}`, { method: 'DELETE' }),
+  },
+
+  inspections: {
+    list: (params = {}) => { const qs = new URLSearchParams(params).toString(); return request(`/inspections${qs ? `?${qs}` : ''}`); },
+    lotStatus: () => request('/inspections/lot-status'),
+    create: (body) => request('/inspections', { method: 'POST', body }),
+    update: (id, body) => request(`/inspections/${id}`, { method: 'PATCH', body }),
+    remove: (id) => request(`/inspections/${id}`, { method: 'DELETE' }),
+  },
+
+  shipments: {
+    list: (params = {}) => { const qs = new URLSearchParams(params).toString(); return request(`/shipments${qs ? `?${qs}` : ''}`); },
+    create: (body) => request('/shipments', { method: 'POST', body }),
+    // Định dạng JSON của Oracle (16 trường Khâu 5) và EDI cho khách hàng
+    oracleList: () => request('/shipments/oracle'),
+    oracleOne: (id) => request(`/shipments/${id}/oracle`),
+    oracleCreate: (body) => request('/shipments/oracle', { method: 'POST', body }),
+    ediText: (id, standard) => raw(`/shipments/${id}/edi?standard=${standard}`),
+    update: (id, body) => request(`/shipments/${id}`, { method: 'PATCH', body }),
+    remove: (id) => request(`/shipments/${id}`, { method: 'DELETE' }),
   },
 
   zones: {

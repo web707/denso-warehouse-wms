@@ -222,7 +222,7 @@ export default function RackPlan() {
   };
 
   return (
-    <div className="p-6 md:p-8 max-w-[1500px] mx-auto space-y-5">
+    <div className="p-4 sm:p-6 md:p-8 max-w-[1500px] mx-auto space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => navigate('/racks')}>
@@ -230,7 +230,7 @@ export default function RackPlan() {
           </Button>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-2xl font-bold text-slate-900">{rack?.name || 'Kệ kho'}</h1>
+              <h1 className="text-2xl font-semibold text-slate-900">{rack?.name || 'Kệ kho'}</h1>
               <Badge variant="secondary">20 ô · 5×4</Badge>
               <Badge className={LOAD_STATUS_META[rackLoadStatus].badge}>{LOAD_STATUS_META[rackLoadStatus].label}</Badge>
             </div>
@@ -362,6 +362,8 @@ export default function RackPlan() {
                   highlightedPartIds={highlightedPartIds}
                   selectedSlotCode={selectedSlotCode}
                   onSelectSlot={setSelectedSlotCode}
+                  rackId={rack?.id}
+                  rackName={rack?.name}
                 />
                 <SlotDetail
                   slot={selectedSlot}

@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { api } from '@/api';
-import { useAuth } from '@/lib/AuthContext';
 
 const StoreContext = createContext(null);
 
@@ -23,6 +22,13 @@ function toParts(rawParts) {
     rackId: p.rackId,
     preferredRackSlot: p.preferredRackSlot,
     color: p.colorHex,
+    lotNumber: p.lotNumber || '',
+    uomCode: p.uomCode || 'EA',
+    unitCost: p.unitCost === null || p.unitCost === undefined ? '' : Number(p.unitCost),
+    expirationDate: p.expirationDate ? String(p.expirationDate).slice(0, 10) : '',
+    supplierName: p.supplierName || '',
+    supplierId: p.supplierId ?? '',
+    supplierSiteCode: p.supplierSiteCode || '',
   }));
 }
 
@@ -74,10 +80,7 @@ export function StoreProvider({ children }) {
   const refetchRules = useCallback(() => api.packingRules.list().then((d) => setPackingRules(toRules(d))), []);
   const refetchHistory = useCallback(() => api.history.list({ pageSize: 200 }).then((res) => setHistory(res.items)), []);
 
-  const { isAuthenticated, isBootstrapping } = useAuth();
-
   useEffect(() => {
-    if (isBootstrapping || !isAuthenticated) return;
     let cancelled = false;
     (async () => {
       setIsLoading(true);
@@ -92,7 +95,7 @@ export function StoreProvider({ children }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [isAuthenticated, isBootstrapping, refetchOrders, refetchParts, refetchRacks, refetchRules, refetchHistory]);
+  }, [refetchOrders, refetchParts, refetchRacks, refetchRules, refetchHistory]);
 
   function resolveDivisionAndPrefix(divisionCode, dcPrefixCode) {
     const division = divisions.find((d) => d.code === String(divisionCode || '').trim().toUpperCase());
@@ -141,6 +144,13 @@ export function StoreProvider({ children }) {
       cartonLengthMm: Math.round((+data.cartonLength || 0) * 10),
       cartonWidthMm: Math.round((+data.cartonWidth || 0) * 10),
       cartonHeightMm: Math.round((+data.cartonHeight || 0) * 10),
+      lotNumber: data.lotNumber || null,
+      uomCode: data.uomCode || 'EA',
+      unitCost: data.unitCost === '' || data.unitCost === undefined || data.unitCost === null ? null : +data.unitCost,
+      expirationDate: data.expirationDate || null,
+      supplierName: data.supplierName || null,
+      supplierId: data.supplierId === '' || data.supplierId === undefined || data.supplierId === null ? null : Math.round(+data.supplierId),
+      supplierSiteCode: data.supplierSiteCode || null,
     };
   }
 

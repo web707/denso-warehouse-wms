@@ -6,6 +6,8 @@ import { seedContainerTypes } from './container-types.seed';
 import { seedDivisions } from './divisions.seed';
 import { seedPackingRules } from './packing-rules.seed';
 import { seedSampleOrder } from './sample-order.seed';
+import { seedSupplyChain } from './supply-chain.seed';
+import { seedTransactionHistory } from './transaction-history.seed';
 
 loadEnv();
 
@@ -16,6 +18,10 @@ const RESET_TABLES = [
   'orders',
   'containers',
   'history_events',
+  'inventory_transactions',
+  'work_orders',
+  'inspections',
+  'shipments',
   'refresh_tokens',
   'password_reset_tokens',
 ];
@@ -36,6 +42,10 @@ async function main() {
   const shouldReset = args.includes('--reset');
   const withSample =
     args.includes('--with-sample') || process.env.SEED_WITH_SAMPLE_ORDER === 'true';
+  const withTransactions =
+    args.includes('--with-transactions') ||
+    args.includes('--transactions') ||
+    process.env.SEED_WITH_TRANSACTIONS === 'true';
 
   await AppDataSource.initialize();
   // eslint-disable-next-line no-console
@@ -62,6 +72,12 @@ async function main() {
 
     if (withSample) {
       await seedSampleOrder(AppDataSource);
+      // Dữ liệu mẫu Khâu 1/4/5 dùng chung số lô với đơn mẫu để thử truy vết
+      await seedSupplyChain(AppDataSource);
+    }
+
+    if (withTransactions) {
+      await seedTransactionHistory(AppDataSource);
     }
 
     // eslint-disable-next-line no-console

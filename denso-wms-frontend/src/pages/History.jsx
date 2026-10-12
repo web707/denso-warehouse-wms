@@ -117,9 +117,9 @@ function HistoryRow({ h }) {
 export default function History() {
   const { history } = useStore();
   return (
-    <div className="p-6 md:p-8 max-w-5xl mx-auto space-y-5">
+    <div className="p-4 sm:p-6 md:p-8 max-w-5xl mx-auto space-y-5">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Lịch sử kho</h1>
+        <h1 className="text-2xl font-semibold text-slate-900">Lịch sử kho</h1>
         <p className="text-sm text-slate-500 mt-1">Theo dõi nhập dữ liệu, phân kệ, thay đổi vị trí và xuất báo cáo</p>
       </div>
       {history.length === 0 ? (

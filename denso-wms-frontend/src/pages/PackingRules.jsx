@@ -30,9 +30,9 @@ const specRows = [
 
 export default function PackingRules() {
   return (
-    <div className="p-6 md:p-8 max-w-5xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 md:p-8 max-w-5xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Quy ước lưu kho</h1>
+        <h1 className="text-2xl font-semibold text-slate-900">Quy ước lưu kho</h1>
         <p className="text-sm text-slate-500 mt-1">Thông số kỹ thuật và nguyên tắc phân bổ linh kiện trên kệ kho</p>
       </div>
 

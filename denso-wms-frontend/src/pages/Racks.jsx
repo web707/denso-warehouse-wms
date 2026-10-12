@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '@/api';
 import { useStore } from '@/lib/store';
-import { calcPartCbm, fmtDec, fmtNum } from '@/lib/calculations';
+import { fmtDec, fmtNum } from '@/lib/calculations';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,34 +24,10 @@ import {
   MapPinned,
 } from 'lucide-react';
 import WarehouseScene3D from '@/components/viz/WarehouseScene3D';
-import { RACK_SAFETY } from '@/lib/viz/rackSafety';
+import { RACKS_PER_ZONE, RACK_STATUS_META, SLOTS_PER_RACK, WAREHOUSE_CODE, compareRacks, slotCode, summarizeRack, zoneOf } from '@/lib/warehouse';
 
-const TARGET_RACKS = 20;
-const SLOTS_PER_RACK = 20;
-const WAREHOUSE_CODE = 'DENSO-WH';
-
-function rackNumber(name) {
-  const m = String(name || '').match(/(\d+)/);
-  return m ? Number(m[1]) : 999;
-}
-
-function rackStatus({ usedSlots, totalWeight, totalCbm, maxWeight, maxCbm }) {
-  const weightLimit = Math.min(maxWeight || RACK_SAFETY.rackMaxKg, RACK_SAFETY.rackMaxKg);
-  if ((weightLimit > 0 && totalWeight > weightLimit) || (maxCbm > 0 && totalCbm > maxCbm)) return 'overload';
-  if (usedSlots === 0) return 'empty';
-  if (weightLimit > 0 && totalWeight >= weightLimit) return 'full';
-  if ((weightLimit > 0 && totalWeight >= weightLimit * RACK_SAFETY.nearRatio) || usedSlots >= 16) return 'near';
-  if (usedSlots >= SLOTS_PER_RACK) return 'full';
-  return 'active';
-}
-
-const STATUS_META = {
-  empty: { label: 'Trống', badge: 'bg-slate-100 text-slate-600 border-slate-200' },
-  active: { label: 'Đang sử dụng', badge: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
-  near: { label: 'Gần đầy', badge: 'bg-amber-100 text-amber-700 border-amber-200' },
-  full: { label: 'Đầy', badge: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
-  overload: { label: 'Quá tải', badge: 'bg-red-100 text-red-700 border-red-200' },
-};
+const TARGET_RACKS = RACKS_PER_ZONE;
+const STATUS_META = RACK_STATUS_META;
 
 export default function Racks() {
   const { orders, parts, racks, rackTypes, currentOrderId, initializeWarehouse } = useStore();
@@ -77,18 +53,13 @@ export default function Racks() {
   const zoneMeta = useMemo(() => zones.find((z) => z.code === selectedZone), [zones, selectedZone]);
 
   const warehouseRacks = useMemo(() => [...racks]
-    .filter((r) => (r.warehouseCode || WAREHOUSE_CODE) === WAREHOUSE_CODE && (r.zoneCode || 'ZONE-A') === selectedZone)
-    .sort((a, b) => rackNumber(a.name) - rackNumber(b.name) || String(a.name).localeCompare(String(b.name)))
+    .filter((r) => (r.warehouseCode || WAREHOUSE_CODE) === WAREHOUSE_CODE && zoneOf(r) === selectedZone)
+    .sort(compareRacks)
     .slice(0, TARGET_RACKS), [racks, selectedZone]);
 
   const rackSummaries = useMemo(() => warehouseRacks.map((rack) => {
-    const rackParts = parts.filter((p) => p.rackId === rack.id);
-    const explicitSlots = new Set(rackParts.filter((p) => Number.isInteger(p.preferredRackSlot)).map((p) => p.preferredRackSlot));
-    const usedSlots = explicitSlots.size > 0 ? Math.min(SLOTS_PER_RACK, explicitSlots.size) : Math.min(SLOTS_PER_RACK, rackParts.length);
-    const totalWeight = rackParts.reduce((s, p) => s + (Number(p.weight) || 0), 0);
-    const totalCbm = rackParts.reduce((s, p) => s + calcPartCbm(p), 0);
-    const status = rackStatus({ usedSlots, totalWeight, totalCbm, maxWeight: rack.maxWeight, maxCbm: rack.maxCbm });
-    return { ...rack, rackParts, partCount: rackParts.length, usedSlots, totalWeight, totalCbm, status };
+    const sum = summarizeRack(rack, parts);
+    return { ...rack, rackParts: sum.parts, partCount: sum.partCount, usedSlots: sum.usedSlots, totalWeight: sum.totalWeight, totalCbm: sum.totalCbm, status: sum.status };
   }), [warehouseRacks, parts]);
 
   const zoneRackIds = useMemo(() => new Set(warehouseRacks.map((r) => r.id)), [warehouseRacks]);
@@ -153,11 +124,11 @@ export default function Racks() {
     setSearchParams({ zone: zoneCode });
   };
 
-  return <div className="p-6 md:p-8 max-w-[1550px] mx-auto space-y-6">
+  return <div className="p-4 sm:p-6 md:p-8 max-w-[1550px] mx-auto space-y-6">
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div>
         <div className="flex items-center gap-2 flex-wrap">
-          <h1 className="text-2xl font-bold text-slate-900">Sơ đồ kho 3D · {selectedZone}</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">Sơ đồ kho 3D · {selectedZone}</h1>
           <Badge variant="outline" className="bg-white">{WAREHOUSE_CODE} / {selectedZone}</Badge>
           {zoneMeta && <Badge variant="secondary">{zoneMeta.name}</Badge>}
         </div>
@@ -200,7 +171,7 @@ export default function Racks() {
     {query && <Card><CardHeader className="pb-2"><CardTitle className="text-base">Kết quả tìm trong {selectedZone}</CardTitle></CardHeader><CardContent>
       {matchedParts.length === 0 ? <p className="text-sm text-slate-400 py-3">Không tìm thấy linh kiện phù hợp trong Zone này.</p> : <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">{matchedParts.slice(0, 30).map((part) => {
         const rack = rackSummaries.find((r) => r.id === part.rackId);
-        const slot = Number.isInteger(part.preferredRackSlot) ? `S${String(part.preferredRackSlot + 1).padStart(2, '0')}` : 'Chưa cố định ô';
+        const slot = Number.isInteger(part.preferredRackSlot) ? slotCode(part.preferredRackSlot) : 'Chưa cố định ô';
         return <button key={part.id} type="button" disabled={!rack} onClick={() => rack && openRack(rack.id, part)} className="text-left rounded-lg border p-3 hover:border-indigo-300 hover:bg-indigo-50/30 disabled:opacity-50 transition"><p className="font-semibold text-sm text-slate-800 truncate">{part.partName}</p><p className="text-xs text-slate-500 mt-1">{part.productCode || 'Không có mã'} · PO {part.masterPo}</p><p className="text-xs text-indigo-600 mt-1.5">{rack ? `${selectedZone} / ${rack.name} · ${slot}` : 'Chưa phân bổ'}</p></button>;
       })}</div>}
     </CardContent></Card>}

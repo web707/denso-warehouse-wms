@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { parseSlotCode, slotPosition } from '@/lib/warehouse';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRightLeft, Boxes, History, MapPin, PackagePlus, PackageMinus, Warehouse, Weight } from 'lucide-react';
 import { api } from '@/api';
@@ -20,7 +21,7 @@ export default function LocationDetail() {
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(true);
   const rack = racks.find((r) => r.id === rackId);
-  const slotIndex = Math.max(0, Number(String(slotCode || '').replace(/\D/g, '')) - 1);
+  const slotIndex = parseSlotCode(slotCode);
   const partsById = useMemo(() => Object.fromEntries(parts.map((p) => [p.id, p])), [parts]);
 
   useEffect(() => {
@@ -43,10 +44,10 @@ export default function LocationDetail() {
   const opUrl = (mode) => `/inventory?mode=${mode}${firstPart ? `&partId=${encodeURIComponent(firstPart.id)}` : ''}&rackId=${encodeURIComponent(rackId)}&slot=${slotIndex}`;
 
   if (loading) return <div className="p-10 text-slate-500">Đang tải vị trí...</div>;
-  return <div className="p-6 lg:p-8 max-w-5xl mx-auto space-y-5">
-    <div className="flex items-center gap-3"><Button variant="ghost" size="icon" onClick={() => navigate(-1)}><ArrowLeft className="w-4 h-4" /></Button><div><h1 className="text-2xl font-bold">{rack?.zoneCode} / {rack?.name} / {String(slotCode).toUpperCase()}</h1><p className="text-sm text-slate-500">Trang truy cập nhanh từ QR vị trí kho.</p></div></div>
+  return <div className="p-4 sm:p-6 md:p-8 max-w-5xl mx-auto space-y-5">
+    <div className="flex items-center gap-3"><Button variant="ghost" size="icon" onClick={() => navigate(-1)}><ArrowLeft className="w-4 h-4" /></Button><div><h1 className="text-2xl font-semibold">{rack?.zoneCode} / {rack?.name} / {String(slotCode).toUpperCase()}</h1><p className="text-sm text-slate-500">Trang truy cập nhanh từ QR vị trí kho.</p></div></div>
     <div className="grid md:grid-cols-4 gap-3">
-      <Info icon={MapPin} label="Vị trí" value={`Tầng ${Math.floor(slotIndex / 5) + 1} · Khoang ${(slotIndex % 5) + 1}`} />
+      <Info icon={MapPin} label="Vị trí" value={`Tầng ${slotPosition(slotIndex).level} · Khoang ${slotPosition(slotIndex).bay}`} />
       <Info icon={Boxes} label="Số thùng" value={cartons} />
       <Info icon={Weight} label="Tải trọng" value={`${weightKg.toLocaleString('vi-VN', { maximumFractionDigits: 1 })} / ${RACK_SAFETY.slotMaxKg} kg`} />
       <Info icon={Warehouse} label="Trạng thái" value={meta.label} color={meta.color} sub={`${loadPercent(weightKg, RACK_SAFETY.slotMaxKg).toFixed(1)}% tải ô`} />
