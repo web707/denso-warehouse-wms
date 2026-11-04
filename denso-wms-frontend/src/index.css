@@ -10,7 +10,7 @@
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
-    --primary: 243 75% 59%;
+    --primary: 158 79% 28%;
     --primary-foreground: 0 0% 100%;
     --secondary: 210 40% 96%;
     --secondary-foreground: 222 47% 11%;
@@ -22,7 +22,7 @@
     --destructive-foreground: 0 0% 98%;
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 243 75% 59%;
+    --ring: 158 79% 28%;
     --chart-1: 243 75% 59%;
     --chart-2: 160 84% 39%;
     --chart-3: 38 92% 50%;
@@ -48,12 +48,12 @@
 
     --sidebar-background: 222 32% 10%;
     --sidebar-foreground: 215 20% 75%;
-    --sidebar-primary: 238 83% 70%;
+    --sidebar-primary: 157 75% 54%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 222 25% 17%;
     --sidebar-accent-foreground: 210 40% 96%;
     --sidebar-border: 222 22% 18%;
-    --sidebar-ring: 238 83% 70%;
+    --sidebar-ring: 157 75% 54%;
   }
 
   @media screen {
@@ -116,6 +116,10 @@
   @layer utilities {
     .dark .bg-white { background-color: rgb(var(--surface)); }
     .dark .bg-white\/80 { background-color: rgb(var(--surface) / 0.8); }
+    /* Semi-transparent white surfaces: 3D tooltips/QR preview use 95% white by default.
+       Without these overrides the inverted dark text renders on a near-white panel. */
+    .dark .bg-white\/90 { background-color: rgb(var(--surface) / 0.9); }
+    .dark .bg-white\/95 { background-color: rgb(var(--surface) / 0.95); }
     .dark .bg-indigo-50, .dark .bg-indigo-100 { background-color: rgb(99 102 241 / 0.16); }
     .dark .bg-indigo-100 { background-color: rgb(99 102 241 / 0.24); }
     .dark [class*="bg-indigo-50/"] { background-color: rgb(99 102 241 / 0.08); }
@@ -185,6 +189,7 @@
 
 /* Khung nhãn QR: luôn giữ nền trắng, chữ tối để xuất PDF/in đúng cả khi đang ở giao diện tối */
 #qr-pdf-root {
+  color-scheme: light;
   color: rgb(15 23 42);
   --surface: 255 255 255;
   --slate-50: 248 250 252; --slate-100: 241 245 249; --slate-200: 226 232 240; --slate-300: 203 213 225;

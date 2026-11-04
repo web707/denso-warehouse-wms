@@ -1,7 +1,7 @@
 {
-  "name": "denso-warehouse-wms-backend",
-  "version": "5.3.0",
-  "description": "DENSO Warehouse WMS v5.2 - independent multi-zone 3D warehouse models",
+  "name": "masan-consumer-wms-backend",
+  "version": "7.0.0",
+  "description": "Masan Consumer warehouse management for FMCG distribution",
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
@@ -20,7 +20,8 @@
     "migration:revert": "npm run typeorm -- migration:revert",
     "seed": "ts-node -r tsconfig-paths/register src/database/seeds/run-seed.ts",
     "seed:transactions": "ts-node -r tsconfig-paths/register src/database/seeds/run-seed.ts --with-transactions",
-    "db:create": "node scripts/db-create.js"
+    "db:create": "node scripts/db-create.js",
+    "setup:admin": "ts-node -r tsconfig-paths/register src/database/seeds/setup-masan-admin.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.11",

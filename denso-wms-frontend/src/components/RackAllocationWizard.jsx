@@ -242,11 +242,11 @@ export default function RackAllocationWizard({ open, onOpenChange, onComplete, p
                     <p className="text-sm font-medium text-slate-600">
                       Kéo thả hoặc click để chọn file đơn hàng
                     </p>
-                    <p className="text-xs text-slate-400 mt-1">Hỗ trợ: Excel (.xlsx, .csv)</p>
+                    <p className="text-xs text-slate-400 mt-1">Hỗ trợ: Excel (.xlsx)</p>
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept=".xlsx,.csv"
+                      accept=".xlsx"
                       onChange={handleNewOrderFile}
                       className="hidden"
                     />

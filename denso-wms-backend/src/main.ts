@@ -14,16 +14,6 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
 
-  // Trust reverse proxy (Render / Vercel) so client IP is accurately extracted for rate limiting
-  try {
-    const httpAdapter = app.getHttpAdapter().getInstance();
-    if (httpAdapter && typeof httpAdapter.set === 'function') {
-      httpAdapter.set('trust proxy', 1);
-    }
-  } catch (err) {
-    // ignore if adapter does not support set
-  }
-
   app.use(helmet());
   app.use(compression());
   app.use(cookieParser());
@@ -47,7 +37,7 @@ async function bootstrap() {
   app.useGlobalInterceptors(new LoggingInterceptor());
 
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('Logibackend API')
+    .setTitle('MASAN Consumer WMS API')
     .setDescription('Warehouse rack allocation and 3D storage management API')
     .setVersion('1.0.0')
     .addBearerAuth()
@@ -58,7 +48,7 @@ async function bootstrap() {
   const port = config.get<number>('port') ?? 5001;
   await app.listen(port);
   // eslint-disable-next-line no-console
-  console.log(`Logibackend listening on http://localhost:${port}/api (docs at /api/docs)`);
+  console.log(`MASAN WMS listening on http://localhost:${port}/api (docs at /api/docs)`);
 }
 
 bootstrap();

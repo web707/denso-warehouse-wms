@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { Html, OrbitControls, Text } from '@react-three/drei';
+import { Html, OrbitControls, Text, Edges } from '@react-three/drei';
 import { api } from '@/api';
 import { Flame, Layers, TrendingUp, AlertTriangle } from 'lucide-react';
 
@@ -67,6 +67,56 @@ function MiniRackFrame({ status, selected, highlighted, heatmapScore, showHeatma
   return <group>{elements}</group>;
 }
 
+// 5 bays x 4 levels: show actual occupied positions, not decorative stock.
+const SKU_COLORS = ['#0f766e', '#2563eb', '#7c3aed', '#c2410c', '#b45309', '#047857', '#be185d', '#0e7490'];
+function skuColor(part) {
+  const value = `${part.productCode || ''}|${part.partName || ''}`;
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) hash = ((hash * 33) + value.charCodeAt(i)) >>> 0;
+  return SKU_COLORS[hash % SKU_COLORS.length];
+}
+function productsBySlot(parts = []) {
+  const slotMap = new Map();
+  const pending = [];
+  parts.forEach((p) => {
+    if (Number(p.cartons || 0) <= 0 && Number(p.quantity || 0) <= 0) return;
+    if (Number.isInteger(p.preferredRackSlot) && p.preferredRackSlot >= 0 && p.preferredRackSlot < 20) {
+      if (!slotMap.has(p.preferredRackSlot)) slotMap.set(p.preferredRackSlot, []);
+      slotMap.get(p.preferredRackSlot).push(p);
+    } else pending.push(p);
+  });
+  // Unassigned slot is an illustrative position only (not an official location).
+  pending.forEach((p) => {
+    const free = Array.from({ length: 20 }, (_, i) => i).find((i) => !slotMap.has(i));
+    if (free !== undefined) slotMap.set(free, [p]);
+  });
+  return [...slotMap].flatMap(([slot, items]) => items.slice(0, 1).map((p) => ({ slot, part: p })));
+}
+
+function RackCartonsPreview({ rack, onSelect }) {
+  const occupied = productsBySlot(rack.rackParts);
+  return <group>
+    {occupied.map(({ slot, part }) => {
+      const bay = slot % 5;
+      const level = Math.floor(slot / 5);
+      const x = -RACK_W / 2 + (bay + 0.5) * (RACK_W / 5);
+      const y = (level + 0.5) * (RACK_H / 4);
+      const color = skuColor(part);
+      return <group key={`${slot}-${part.id}`}>
+        <mesh position={[x, y, 0]} castShadow receiveShadow onClick={(e)=>{e.stopPropagation();onSelect?.(rack.id);}}>
+          <boxGeometry args={[RACK_W/5*0.76, RACK_H/4*0.70, RACK_D*0.72]} />
+          <meshStandardMaterial color={color} roughness={0.88} metalness={0.02} />
+          <Edges scale={1.003} color="#1e293b" threshold={18} />
+        </mesh>
+        <mesh position={[x, y - RACK_H/4*0.31, 0]}>
+          <boxGeometry args={[RACK_W/5*0.83, 0.025, RACK_D*0.78]}/>
+          <meshStandardMaterial color="#c5a77f" roughness={0.9}/>
+        </mesh>
+      </group>;
+    })}
+  </group>;
+}
+
 function WarehouseRack({ rack, position, selected, highlighted, onSelect, heatmapInfo, showHeatmap }) {
   const [hovered, setHovered] = useState(false);
   const score = heatmapInfo?.score ?? 0;
@@ -119,6 +169,7 @@ function WarehouseRack({ rack, position, selected, highlighted, onSelect, heatma
         heatmapScore={showHeatmap ? score : undefined}
         showHeatmap={showHeatmap}
       />
+      <RackCartonsPreview rack={rack} onSelect={onSelect} />
 
       <Text
         position={[0, RACK_H + 0.18, 0]}
@@ -139,6 +190,7 @@ function WarehouseRack({ rack, position, selected, highlighted, onSelect, heatma
       >
         {rack.name} {showHeatmap ? `[${score}đ]` : ''}
       </Text>
+      {rack.partCount > 0 && <Text position={[0,RACK_H+0.36,0]} fontSize={0.115} color="#047857" anchorX="center" anchorY="middle">{`${rack.partCount} SKU · ${(rack.rackParts || []).reduce((v,p)=>v+Number(p.cartons||0),0)} thùng`}</Text>}
 
       {hovered && (
         <Html position={[0, RACK_H + 0.55, 0]} center distanceFactor={8} style={{ pointerEvents: 'none' }}>
@@ -186,6 +238,10 @@ function WarehouseRack({ rack, position, selected, highlighted, onSelect, heatma
                 <div className="text-slate-500">
                   {rack.totalWeight.toLocaleString('vi-VN')} kg · {rack.totalCbm.toFixed(2)} m³
                 </div>
+                {rack.rackParts?.length > 0 && <div className="mt-2 border-t border-slate-200 pt-2 space-y-1 max-w-[240px]">
+                  {rack.rackParts.slice(0,4).map((p)=><p key={p.id} className="text-[10px] text-slate-600 truncate">● {p.partName} · {p.cartons} thùng</p>)}
+                  {rack.rackParts.length > 4 && <p className="text-[10px] text-slate-400">+{rack.rackParts.length-4} mã hàng khác</p>}
+                </div>}
               </div>
             )}
           </div>
@@ -219,7 +275,7 @@ function WarehouseShell({ warehouseCode, zoneCode }) {
         color="#334155"
         anchorX="center"
       >
-        {warehouseCode} · {zoneCode} · 20 RACKS
+        DC-HN-01 · {zoneCode} · 20 KỆ
       </Text>
     </group>
   );
@@ -415,7 +471,7 @@ export default function WarehouseScene3D({
           </div>
         )}
         <div className="text-slate-400 text-[10px] hidden sm:block">
-          Click kệ để phóng to chi tiết 20 ô · Kéo để xoay góc nhìn
+          Khối màu = hàng thực tế đang có trong ô · Click để xem chi tiết · Kéo để xoay
         </div>
       </div>
     </div>

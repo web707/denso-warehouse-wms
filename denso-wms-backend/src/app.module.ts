@@ -7,6 +7,8 @@ import configuration from './config/configuration';
 import { validate } from './config/env.validation';
 import { buildTypeOrmOptions } from './config/typeorm.config';
 import { AuthModule } from './auth/auth.module';
+import { GlobalJwtGuard } from './auth/guards/global-jwt.guard';
+import { MasanAccessGuard } from './auth/guards/masan-access.guard';
 import { DivisionsModule } from './divisions/divisions.module';
 import { ContainerTypesModule } from './container-types/container-types.module';
 import { PackingRulesModule } from './packing-rules/packing-rules.module';
@@ -49,6 +51,6 @@ import { ShipmentsModule } from './shipments/shipments.module';
     InspectionsModule,
     ShipmentsModule,
   ],
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }, { provide: APP_GUARD, useClass: GlobalJwtGuard }, { provide: APP_GUARD, useClass: MasanAccessGuard }],
 })
 export class AppModule {}

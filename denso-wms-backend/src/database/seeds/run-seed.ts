@@ -49,7 +49,7 @@ async function main() {
 
   await AppDataSource.initialize();
   // eslint-disable-next-line no-console
-  console.log('Connected. Seeding DENSO Warehouse WMS...');
+  console.log('Connected. Seeding MASAN Consumer WMS...');
 
   try {
     if (shouldReset) {

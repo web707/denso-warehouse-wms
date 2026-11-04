@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ArrowRightLeft, Download, Upload, Warehouse } from 'lucide-react';
 import { api } from '@/api';
+import { useAuth } from '@/lib/auth';
+import { canWrite } from '@/lib/access';
 import { useStore } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +20,8 @@ export default function InventoryOperations() {
   const { parts, racks, applyInventorySnapshot, refetchParts } = useStore();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const canEdit = canWrite(user?.role, 'inventory');
   const [type, setType] = useState('inbound');
   const [partId, setPartId] = useState('');
   const [qty, setQty] = useState('');
@@ -106,7 +110,7 @@ export default function InventoryOperations() {
     </div>
 
     <div className="grid lg:grid-cols-[420px_1fr] gap-6">
-      <form onSubmit={submit} className="bg-white border rounded-2xl p-5 space-y-4 shadow-sm">
+      {canEdit ? <form onSubmit={submit} className="bg-white border rounded-2xl p-5 space-y-4 shadow-sm">
         <div className="grid grid-cols-3 gap-2">
           {TYPES.map((t) => <button type="button" key={t.value} onClick={() => setType(t.value)} className={`rounded-xl border px-2 py-3 text-xs font-semibold ${type === t.value ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'text-slate-600'}`}>
             <t.icon className="w-4 h-4 mx-auto mb-1" />{t.label}
@@ -115,7 +119,7 @@ export default function InventoryOperations() {
 
         <label className="block text-sm font-medium">PART
           <select className="mt-1 w-full h-10 rounded-md border px-3 bg-white" value={partId} onChange={(e) => { setPartId(e.target.value); setToRackId(''); setToSlot(''); }} required>
-            <option value="">Chọn linh kiện...</option>
+            <option value="">Chọn sản phẩm...</option>
             {parts.map((p) => <option key={p.id} value={p.id}>{p.partName} · {p.productCode || p.masterPo}</option>)}
           </select>
         </label>
@@ -161,7 +165,7 @@ export default function InventoryOperations() {
 
         <label className="block text-xs">Ghi chú<Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="VD: Nhập từ chuyền A, xuất cho line 2..." /></label>
         <Button className="w-full" disabled={saving || !partId}>{saving ? 'Đang lưu...' : 'Xác nhận nghiệp vụ'}</Button>
-      </form>
+      </form> : <div className="bg-blue-50 border border-blue-200 text-blue-900 p-5 rounded-2xl"><p className="font-semibold">Chế độ xem lịch sử</p><p className="text-sm mt-2">Vai trò hiện tại không được tạo giao dịch nhập/xuất/điều chuyển. Vui lòng liên hệ quản lý kho khi cần thực hiện.</p></div>}
 
       <div className="bg-white border rounded-2xl overflow-hidden shadow-sm">
         <div className="p-4 border-b flex items-center gap-2"><Warehouse className="w-4 h-4"/><b>Lịch sử nghiệp vụ gần nhất</b></div>

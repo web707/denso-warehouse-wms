@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, ArrowRightLeft, CheckCircle2, MapPinned, QrCode, Warehouse } from 'lucide-react';
 import { useStore } from '@/lib/store';
+import MasanOpsGuide from '@/components/MasanOpsGuide';
 import { calcPartCbm, fmtDec, fmtNum } from '@/lib/calculations';
 import { RACK_STATUS_META, RACK_STATUS_ORDER, SLOTS_PER_RACK, expiryInfo, summarizeWarehouse } from '@/lib/warehouse';
 import { isShipmentLate, isWorkOrderOverdue, lotStatusMap, useLotStatus, useShipments, useWorkOrders } from '@/lib/supplyChain';
@@ -111,11 +112,16 @@ export default function Dashboard() {
 
   return (
     <div className="p-4 sm:p-4 sm:p-6 md:p-8 max-w-7xl mx-auto space-y-6">
+      <MasanOpsGuide />
+      <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex flex-wrap justify-between gap-3 items-center">
+        <div><p className="text-sm font-semibold text-emerald-900">Quản lý hàng cũ / mới theo FEFO</p><p className="text-xs text-emerald-800 mt-1">Ưu tiên xem lô có HSD gần nhất, kiểm tra lô sắp hoặc đã hết hạn trước khi xuất kho.</p></div>
+        <Button variant="outline" asChild className="bg-white border-emerald-200 text-emerald-800"><Link to="/fefo">Mở danh sách FEFO</Link></Button>
+      </div>
       <div className="flex flex-wrap gap-3 items-end justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Tổng quan kho</h1>
           <p className="text-sm text-slate-500 mt-1">
-            {fmtNum(orders.length)} lô linh kiện · {zones.length} Zone · {fmtNum(racks.length)} kệ
+            {fmtNum(orders.length)} lô sản phẩm · {zones.length} Zone · {fmtNum(racks.length)} kệ
           </p>
         </div>
         <div className="flex gap-2">

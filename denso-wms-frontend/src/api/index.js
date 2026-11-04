@@ -1,6 +1,13 @@
 import { request, raw } from './client';
 
 export const api = {
+  auth: {
+    login: (username, password) => request('/auth/login', { method: 'POST', body: { username, password } }),
+    me: () => request('/auth/me'),
+    users: () => request('/auth/users'),
+    createUser: (body) => request('/auth/users', { method: 'POST', body }),
+    updateUser: (id, body) => request(`/auth/users/${id}`, { method: 'PATCH', body }),
+  },
   divisions: { list: () => request('/divisions') },
   rackTypes: { list: () => request('/rack-types') },
 

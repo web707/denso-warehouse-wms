@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -11,6 +11,7 @@ import { MailService } from './mail.service';
 import { PasswordService } from './password.service';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { AuthenticatedUser } from './types/authenticated-user.type';
+import { CreateManagedUserDto, UpdateManagedUserDto } from './dto/manage-user.dto';
 
 function sha256(input: string): string {
   return createHash('sha256').update(input).digest('hex');
@@ -57,6 +58,49 @@ export class AuthService {
     return this.config.get<string>(key)!;
   }
 
+  private toPublicUser(user: User) {
+    return { id: user.id, email: user.email, fullName: user.fullName, role: user.role, isActive: user.isActive };
+  }
+
+  async listUsers() {
+    const users = await this.users.find({ order: { createdAt: 'DESC' } });
+    return users.map((user) => this.toPublicUser(user));
+  }
+
+  async createManagedUser(dto: CreateManagedUserDto) {
+    const email = dto.email.trim().toLowerCase();
+    const existing = await this.users.findOne({ where: { email } });
+    if (existing) throw new ConflictException('Email đã tồn tại');
+    if (dto.role === UserRole.ADMIN) throw new BadRequestException('Không thể tự tạo tài khoản admin thứ hai qua giao diện');
+    const user = await this.users.save(this.users.create({
+      email, fullName: dto.fullName?.trim() || null, passwordHash: await this.passwordService.hash(dto.password),
+      role: dto.role, isActive: true,
+    }));
+    return this.toPublicUser(user);
+  }
+
+  async updateManagedUser(id: string, dto: UpdateManagedUserDto, currentUserId: string) {
+    const user = await this.users.findOne({ where: { id } });
+    if (!user) throw new NotFoundException('Không tìm thấy nhân sự');
+    if (user.id === currentUserId && (dto.isActive === false || (dto.role && dto.role !== UserRole.ADMIN))) {
+      throw new ForbiddenException('Không thể vô hiệu hóa hoặc hạ quyền tài khoản đang đăng nhập');
+    }
+    if (user.role === UserRole.ADMIN && dto.role && dto.role !== UserRole.ADMIN) {
+      throw new ForbiddenException('Không thay đổi vai trò quản trị viên trong giao diện');
+    }
+    if (dto.role === UserRole.ADMIN && user.role !== UserRole.ADMIN) {
+      throw new ForbiddenException('Không cấp quyền admin từ giao diện nhân sự');
+    }
+    if (dto.fullName !== undefined) user.fullName = dto.fullName.trim() || null;
+    if (dto.role !== undefined) user.role = dto.role;
+    if (dto.isActive !== undefined) user.isActive = dto.isActive;
+    await this.users.save(user);
+    if (!user.isActive) {
+      await this.refreshTokens.update({ userId: user.id, revokedAt: IsNull() }, { revokedAt: new Date() });
+    }
+    return this.toPublicUser(user);
+  }
+
   async register(email: string, password: string, fullName?: string): Promise<AuthResponseDto> {
     const normalizedEmail = email.trim().toLowerCase();
     const existing = await this.users.findOne({ where: { email: normalizedEmail } });
@@ -76,7 +120,9 @@ export class AuthService {
   }
 
   async login(email: string, password: string): Promise<AuthResponseDto> {
-    const user = await this.users.findOne({ where: { email: email.trim().toLowerCase() } });
+    const input = email.trim().toLowerCase();
+    const actualEmail = input === 'admin' ? (this.config.get<string>('seed.adminEmail') || input) : input;
+    const user = await this.users.findOne({ where: { email: actualEmail } });
     if (!user || !user.isActive) {
       throw new UnauthorizedException({
         code: 'INVALID_CREDENTIALS',
@@ -158,7 +204,9 @@ export class AuthService {
   }
 
   async forgotPassword(email: string): Promise<void> {
-    const user = await this.users.findOne({ where: { email: email.trim().toLowerCase() } });
+    const input = email.trim().toLowerCase();
+    const actualEmail = input === 'admin' ? (this.config.get<string>('seed.adminEmail') || input) : input;
+    const user = await this.users.findOne({ where: { email: actualEmail } });
     // Always behave the same regardless of whether the account exists
     // (anti user-enumeration) — the controller always returns 202.
     if (!user) return;

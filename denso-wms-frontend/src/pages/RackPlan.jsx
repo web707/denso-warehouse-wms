@@ -239,7 +239,7 @@ export default function RackPlan() {
               <Badge className={LOAD_STATUS_META[rackLoadStatus].badge}>{LOAD_STATUS_META[rackLoadStatus].label}</Badge>
             </div>
             <p className="text-sm text-slate-500 mt-1 flex items-center gap-1.5">
-              <Warehouse className="w-3.5 h-3.5" /> {rack?.warehouseCode || 'DENSO-WH'}
+              <Warehouse className="w-3.5 h-3.5" /> DC-HN-01
               <span>·</span><MapPin className="w-3.5 h-3.5" /> {rack?.zoneCode || 'ZONE-A'}
             </p>
           </div>
@@ -321,7 +321,7 @@ export default function RackPlan() {
               <div className="flex flex-wrap items-center gap-3 justify-between">
                 <div className="relative min-w-[280px] flex-1 max-w-md">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Tìm tên linh kiện, mã hàng, Master PO..." className="pl-9" />
+                  <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Tìm tên sản phẩm, mã hàng, Master PO..." className="pl-9" />
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-medium text-slate-500">Hiển thị đến tầng:</span>
@@ -396,7 +396,7 @@ export default function RackPlan() {
         open={importOpen}
         onOpenChange={setImportOpen}
         targetOrderId={rack?.orderId}
-        targetOrderLabel={rackOrder?.name || rackOrder?.orderNumber || 'Lô linh kiện'}
+        targetOrderLabel={rackOrder?.name || rackOrder?.orderNumber || 'Lô hàng'}
         targetRackId={rackId}
         targetRackLabel={rack?.name || 'Kệ kho'}
         onImported={handleRackImported}
@@ -419,7 +419,7 @@ function SlotDetail({ slot, parts, metric, allSlots, moving, onMovePart }) {
   if (!slot) {
     return (
       <Card className="h-full"><CardContent className="h-full min-h-[300px] flex items-center justify-center text-center text-sm text-slate-400 p-8">
-        Click hoặc hover một ô S01–S20 trên mô hình 3D để xem tải trọng và linh kiện.
+        Click hoặc hover một ô S01–S20 trên mô hình 3D để xem tải trọng và sản phẩm.
       </CardContent></Card>
     );
   }
@@ -445,7 +445,7 @@ function SlotDetail({ slot, parts, metric, allSlots, moving, onMovePart }) {
         </div>
 
         {!occupied ? (
-          <div className="rounded-lg border border-dashed p-6 text-center text-sm text-slate-400">Ô này đang trống và sẵn sàng lưu linh kiện.</div>
+          <div className="rounded-lg border border-dashed p-6 text-center text-sm text-slate-400">Ô này đang trống và sẵn sàng lưu sản phẩm.</div>
         ) : (
           <>
             <div className="space-y-2">

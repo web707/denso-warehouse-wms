@@ -1,6 +1,6 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { SkipThrottle, Throttle } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthResponseDto } from './dto/auth-response.dto';
@@ -11,22 +11,26 @@ import { RegisterDto } from './dto/register.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AuthenticatedUser } from './types/authenticated-user.type';
+import { UserRole } from './entities/user.entity';
+import { Roles } from './decorators/roles.decorator';
+import { CreateManagedUserDto, UpdateManagedUserDto } from './dto/manage-user.dto';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Roles(UserRole.ADMIN)
   @Post('register')
   register(@Body() dto: RegisterDto): Promise<AuthResponseDto> {
     return this.authService.register(dto.email, dto.password, dto.fullName);
   }
 
-  @SkipThrottle()
+  @Throttle({ default: { limit: 5, ttl: 900_000 } })
   @Post('login')
   @HttpCode(HttpStatus.OK)
   login(@Body() dto: LoginDto): Promise<AuthResponseDto> {
-    return this.authService.login(dto.email, dto.password);
+    return this.authService.login(dto.username || dto.email || '', dto.password);
   }
 
   @Post('refresh')
@@ -47,6 +51,20 @@ export class AuthController {
   async forgotPassword(@Body() dto: ForgotPasswordDto): Promise<{ message: string }> {
     await this.authService.forgotPassword(dto.email);
     return { message: 'Nếu email tồn tại, hướng dẫn đặt lại mật khẩu đã được gửi.' };
+  }
+
+  @Get('users')
+  @Roles(UserRole.ADMIN)
+  users() { return this.authService.listUsers(); }
+
+  @Post('users')
+  @Roles(UserRole.ADMIN)
+  createUser(@Body() dto: CreateManagedUserDto) { return this.authService.createManagedUser(dto); }
+
+  @Patch('users/:id')
+  @Roles(UserRole.ADMIN)
+  patchUser(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateManagedUserDto, @CurrentUser() admin: AuthenticatedUser) {
+    return this.authService.updateManagedUser(id, dto, admin.id);
   }
 
   @Post('reset-password')

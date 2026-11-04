@@ -3,6 +3,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Pencil, Plus, Search, Trash2, Truck, PackageCheck, Download, FileJson, FileText, Upload } from 'lucide-react';
 import { api } from '@/api';
+import { useAuth } from '@/lib/auth';
+import { canWrite } from '@/lib/access';
 import { fmtNum } from '@/lib/calculations';
 import {
   KEYS, SHIPMENT_STATUS, fmtDate, inputToIso, isShipmentLate, isoToDateInput, numOrNull, strOrNull, useShipments,
@@ -27,10 +29,10 @@ const FIELDS = [
   { key: 'shipmentStatus', label: 'Trạng thái (ShipmentStatus)', type: 'select', options: STATUS_OPTIONS },
   { key: 'sourceOrderNumber', label: 'Đơn hàng của khách (SourceOrderNumber)' },
   { type: 'section', label: 'Khách hàng' },
-  { key: 'customerName', label: 'Tên khách (CustomerName)', required: true, placeholder: 'Toyota' },
+  { key: 'customerName', label: 'Tên khách (CustomerName)', required: true, placeholder: 'Đại lý WinMart / Nhà phân phối' },
   { key: 'customerNumber', label: 'Mã khách (CustomerNumber)' },
   { type: 'section', label: 'Hàng giao' },
-  { key: 'itemNumber', label: 'Item Number', required: true, placeholder: 'A009' },
+  { key: 'itemNumber', label: 'Mã SKU', required: true, placeholder: 'MCH-KKM-01' },
   { key: 'lotNumber', label: 'Lot Number', placeholder: 'LOT-2026-001', help: 'Dùng để truy vết ngược về kho và kiểm tra' },
   { key: 'shippedQuantity', label: 'Số lượng (ShippedQuantity)', type: 'number' },
   { key: 'grossWeight', label: 'Tổng trọng lượng (GrossWeight)', type: 'number' },
@@ -91,6 +93,8 @@ export default function Shipments() {
   const { data: rows = [], isLoading, isError, refetch } = useShipments();
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const canEdit = canWrite(user?.role, 'shipments');
   const [status, setStatus] = useState('ALL');
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState(null);
@@ -166,18 +170,18 @@ export default function Shipments() {
     <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Giao hàng</h1>
-          <p className="text-sm text-slate-500 mt-1">Lô giao cho khách (Shipment) · Khâu 5 · Oracle Fusion Shipping</p>
+          <h1 className="text-2xl font-semibold text-slate-900">Điều phối giao hàng Masan</h1>
+          <p className="text-sm text-slate-500 mt-1">Theo dõi lô giao đến WinMart, đại lý và nhà phân phối; quản lý mã hãng vận chuyển và vận đơn.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => setOracleOpen(true)}><Upload className="w-4 h-4 mr-2" />Nhập JSON Oracle</Button>
+          {canEdit && <Button variant="outline" onClick={() => setOracleOpen(true)}><Upload className="w-4 h-4 mr-2" />Nhập JSON Oracle</Button>}
           <Button variant="outline" onClick={() => exportJson(null)}><Download className="w-4 h-4 mr-2" />Xuất JSON Oracle</Button>
-          <Button onClick={() => { setEditing(null); setDialogOpen(true); }}><Plus className="w-4 h-4 mr-2" />Thêm lô giao</Button>
+          {canEdit && <Button onClick={() => { setEditing(null); setDialogOpen(true); }}><Plus className="w-4 h-4 mr-2" />Thêm lô giao</Button>}
         </div>
       </div>
 
       <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-700">
-        Lưu ý: định dạng Khâu 5 (JSON + EDI) đã được xác nhận, các trường chi tiết là dữ liệu giả lập bám theo chuẩn ngành. File EDI xuất ra mang cờ thử nghiệm và cần đối chiếu Implementation Guide của Toyota/Honda trước khi gửi thật.
+        Theo dõi giao hàng hiện đang dùng dữ liệu nội bộ và cập nhật trạng thái thủ công. Chưa kết nối API/TMS của đơn vị vận chuyển thực tế. Chức năng xuất JSON/EDI chỉ dành cho tích hợp thử nghiệm; cần xác nhận chuẩn đối tác trước khi gửi dữ liệu thật.
       </p>
 
       <div className="rounded-xl border border-slate-200 bg-white grid grid-cols-2 lg:grid-cols-4 overflow-hidden [&>*]:border-slate-200 [&>*:nth-child(2n)]:border-l lg:[&>*]:border-l [&>*:first-child]:border-l-0 [&>*:nth-child(n+3)]:border-t lg:[&>*:nth-child(n+3)]:border-t-0">
@@ -219,7 +223,7 @@ export default function Shipments() {
               )}
               {!isLoading && !isError && filtered.length === 0 && (
                 <tr><td colSpan={8} className="px-3 py-12 text-center text-slate-500">
-                  {rows.length === 0 ? 'Chưa có lô giao nào. Bấm "Thêm lô giao" để tạo lô đầu tiên.' : 'Không có lô nào khớp bộ lọc.'}
+                  {rows.length === 0 ? (canEdit ? 'Chưa có lô giao nào. Bấm Thêm lô giao để tạo lô đầu tiên.' : 'Chưa có dữ liệu lô giao hàng.') : 'Không có lô nào khớp bộ lọc.'}
                 </td></tr>
               )}
               {filtered.map((s) => {
@@ -250,10 +254,10 @@ export default function Shipments() {
                     </td>
                     <td className="px-3 py-3"><Pill tone={meta.tone}>{meta.label}</Pill></td>
                     <td className="px-3 py-3 whitespace-nowrap text-right">
-                      {s.shipmentStatus === 'RELEASED' && (
+                      {canEdit && s.shipmentStatus === 'RELEASED' && (
                         <Button variant="outline" size="sm" className="mr-1" onClick={() => advance(s, 'SHIPPED')}><Truck className="w-4 h-4 mr-1.5" />Xuất phát</Button>
                       )}
-                      {s.shipmentStatus === 'SHIPPED' && (
+                      {canEdit && s.shipmentStatus === 'SHIPPED' && (
                         <Button variant="outline" size="sm" className="mr-1" onClick={() => advance(s, 'DELIVERED')}><PackageCheck className="w-4 h-4 mr-1.5" />Đã giao</Button>
                       )}
                       <DropdownMenu>
@@ -268,8 +272,8 @@ export default function Shipments() {
                           <DropdownMenuItem onClick={() => exportEdi(s, 'edifact')}><FileText className="w-4 h-4 mr-2" />EDIFACT DESADV</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
-                      <Button variant="ghost" size="icon" aria-label={`Sửa ${s.shipmentNumber}`} onClick={() => { setEditing(s); setDialogOpen(true); }}><Pencil className="w-4 h-4" /></Button>
-                      <Button variant="ghost" size="icon" aria-label={`Xóa ${s.shipmentNumber}`} onClick={() => setToDelete(s)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
+                      {canEdit && <Button variant="ghost" size="icon" aria-label={`Sửa ${s.shipmentNumber}`} onClick={() => { setEditing(s); setDialogOpen(true); }}><Pencil className="w-4 h-4" /></Button>}
+                      {canEdit && <Button variant="ghost" size="icon" aria-label={`Xóa ${s.shipmentNumber}`} onClick={() => setToDelete(s)}><Trash2 className="w-4 h-4 text-red-500" /></Button>}
                     </td>
                   </tr>
                 );
@@ -279,7 +283,7 @@ export default function Shipments() {
         </div>
       </section>
 
-      <RecordDialog
+      {canEdit && <RecordDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         title={editing ? `Sửa lô giao ${editing.shipmentNumber}` : 'Thêm lô giao hàng'}
@@ -288,15 +292,15 @@ export default function Shipments() {
         initial={initial}
         onSubmit={save}
         submitLabel={editing ? 'Lưu thay đổi' : 'Tạo lô giao'}
-      />
-      <OracleImportDialog open={oracleOpen} onOpenChange={setOracleOpen} onDone={refresh} />
-      <ConfirmDialog
+      />}
+      {canEdit && <OracleImportDialog open={oracleOpen} onOpenChange={setOracleOpen} onDone={refresh} />}
+      {canEdit && <ConfirmDialog
         open={!!toDelete}
         onOpenChange={(o) => !o && setToDelete(null)}
         title="Xóa lô giao?"
         description={toDelete ? `Lô ${toDelete.shipmentNumber} sẽ bị xóa vĩnh viễn.` : ''}
         onConfirm={remove}
-      />
+      />}
     </div>
   );
 }

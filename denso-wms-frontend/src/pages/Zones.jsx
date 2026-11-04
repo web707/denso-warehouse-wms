@@ -55,7 +55,7 @@ export default function Zones() {
 
   const initializeZone = async (zoneCode) => {
     if (!anchorOrderId) {
-      toast({ variant: 'destructive', title: 'Chưa có lô linh kiện', description: 'Cần có ít nhất một lô linh kiện để khởi tạo kệ cho Zone mới.' });
+      toast({ variant: 'destructive', title: 'Chưa có lô sản phẩm', description: 'Cần có ít nhất một lô sản phẩm để khởi tạo kệ cho Zone mới.' });
       return;
     }
     setInitializingCode(zoneCode);
@@ -89,7 +89,7 @@ export default function Zones() {
           <h1 className="text-2xl font-semibold">Quản lý Zone</h1>
           <p className="text-sm text-slate-500 mt-1">Mỗi Zone là một khu kho độc lập, có mô hình 3D và tối đa 20 kệ riêng (400 ô/Zone).</p>
         </div>
-        <Badge variant="outline" className="bg-white gap-1.5"><Warehouse className="w-3.5 h-3.5" /> DENSO-WH</Badge>
+        <Badge variant="outline" className="bg-white gap-1.5"><Warehouse className="w-3.5 h-3.5" /> DC-HN-01</Badge>
       </div>
 
       <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">

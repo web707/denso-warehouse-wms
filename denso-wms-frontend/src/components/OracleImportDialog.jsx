@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 const EXAMPLE = `{
   "ShipmentNumber": "SHP-2026-0100",
   "CustomerNumber": "C-TOY",
-  "CustomerName": "Toyota",
+  "CustomerName": "WinMart",
   "RequestedShipDate": "2026-10-20T00:00:00Z",
   "ShipmentStatus": "Released",
   "CarrierCode": "DHL",

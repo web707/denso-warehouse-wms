@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '@/api';
+import { useAuth } from '@/lib/auth';
+import { canWrite } from '@/lib/access';
 import { useStore } from '@/lib/store';
 import { fmtDec, fmtNum } from '@/lib/calculations';
 import { useToast } from '@/components/ui/use-toast';
@@ -35,6 +37,9 @@ export default function Racks() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const canEdit = canWrite(user?.role, 'inventory');
+  const canManage = canWrite(user?.role, 'racks');
   const [search, setSearch] = useState('');
   const [selectedRackId, setSelectedRackId] = useState(null);
   const [initializing, setInitializing] = useState(false);
@@ -94,7 +99,7 @@ export default function Racks() {
 
   const handleInitialize = async () => {
     if (!anchorOrderId) {
-      toast({ variant: 'destructive', title: 'Chưa có lô linh kiện', description: 'Hãy tạo hoặc nhập một lô linh kiện trước khi khởi tạo 20 kệ.' });
+      toast({ variant: 'destructive', title: 'Chưa có lô sản phẩm', description: 'Hãy tạo hoặc nhập một lô sản phẩm trước khi khởi tạo 20 kệ.' });
       return;
     }
     setInitializing(true);
@@ -190,10 +195,10 @@ export default function Racks() {
       <div>
         <div className="flex items-center gap-2 flex-wrap">
           <h1 className="text-2xl font-semibold text-slate-900">Sơ đồ kho 3D · {selectedZone}</h1>
-          <Badge variant="outline" className="bg-white">{WAREHOUSE_CODE} / {selectedZone}</Badge>
+          <Badge variant="outline" className="bg-white">DC-HN-01 / {selectedZone}</Badge>
           {zoneMeta && <Badge variant="secondary">{zoneMeta.name}</Badge>}
         </div>
-        <p className="text-sm text-slate-500 mt-1">Mỗi Zone có 20 kệ riêng · 4 dãy × 5 kệ · mỗi kệ 20 ô · tổng 400 vị trí/Zone</p>
+        <p className="text-sm text-slate-500 mt-1">Mỗi Zone có 20 kệ riêng · 4 dãy × 5 kệ · mỗi kệ 20 ô · tổng 400 vị trí/Zone. Khối màu trên kệ thể hiện SKU đang lưu trong vị trí.</p>
       </div>
       <div className="flex flex-wrap items-end gap-2">
         <label className="text-xs text-slate-500">Đang xem Zone
@@ -202,7 +207,7 @@ export default function Racks() {
           </select>
         </label>
         <Button variant="outline" onClick={() => navigate('/zones')}><MapPinned className="w-4 h-4 mr-1.5" />Quản lý Zone</Button>
-        {warehouseRacks.length < TARGET_RACKS && <Button onClick={handleInitialize} disabled={initializing || !anchorOrderId}>
+        {canManage && warehouseRacks.length < TARGET_RACKS && <Button onClick={handleInitialize} disabled={initializing || !anchorOrderId}>
           {initializing ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Sparkles className="w-4 h-4 mr-1.5" />}Khởi tạo đủ 20 kệ
         </Button>}
       </div>
@@ -221,11 +226,11 @@ export default function Racks() {
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div><h2 className="font-semibold text-slate-900 flex gap-2 items-center"><ArrowRightLeft className="w-4 h-4" /> Điều chuyển hàng trực tiếp trên sơ đồ 3D</h2>
             <p className="text-xs text-slate-500 mt-1">Chuyển toàn bộ PART sang kệ hoặc Zone khác; chỉ thay đổi mô hình khi backend lưu thành công.</p></div>
-          <Button variant={transferMode ? 'default' : 'outline'} onClick={() => { setTransferMode((v) => !v); setSourceRackId(''); setMovingPartId(''); setTargetRackId(''); setTargetSlot(''); }}>
+          {canEdit && <Button variant={transferMode ? 'default' : 'outline'} onClick={() => { setTransferMode((v) => !v); setSourceRackId(''); setMovingPartId(''); setTargetRackId(''); setTargetSlot(''); }}>
             {transferMode ? 'Thoát chế độ điều chuyển' : 'Bật điều chuyển 3D'}
-          </Button>
+          </Button>}
         </div>
-        {transferMode && <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 rounded-xl border bg-slate-50 p-4">
+        {canEdit && transferMode && <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 rounded-xl border bg-slate-50 p-4">
           <label className="text-xs font-semibold text-slate-600">1. Kệ nguồn (click trên 3D)
             <select className="block mt-1 h-10 w-full rounded-md border bg-white px-2" value={sourceRackId} onChange={(e) => { setSourceRackId(e.target.value); setMovingPartId(''); setTargetRackId(''); setTargetSlot(''); }}>
               <option value="">Chọn kệ nguồn...</option>
@@ -272,7 +277,7 @@ export default function Racks() {
     </Card>
 
     {query && <Card><CardHeader className="pb-2"><CardTitle className="text-base">Kết quả tìm trong {selectedZone}</CardTitle></CardHeader><CardContent>
-      {matchedParts.length === 0 ? <p className="text-sm text-slate-400 py-3">Không tìm thấy linh kiện phù hợp trong Zone này.</p> : <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">{matchedParts.slice(0, 30).map((part) => {
+      {matchedParts.length === 0 ? <p className="text-sm text-slate-400 py-3">Không tìm thấy sản phẩm phù hợp trong Zone này.</p> : <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">{matchedParts.slice(0, 30).map((part) => {
         const rack = rackSummaries.find((r) => r.id === part.rackId);
         const slot = Number.isInteger(part.preferredRackSlot) ? slotCode(part.preferredRackSlot) : 'Chưa cố định ô';
         return <button key={part.id} type="button" disabled={!rack} onClick={() => rack && openRack(rack.id, part)} className="text-left rounded-lg border p-3 hover:border-indigo-300 hover:bg-indigo-50/30 disabled:opacity-50 transition"><p className="font-semibold text-sm text-slate-800 truncate">{part.partName}</p><p className="text-xs text-slate-500 mt-1">{part.productCode || 'Không có mã'} · PO {part.masterPo}</p><p className="text-xs text-indigo-600 mt-1.5">{rack ? `${selectedZone} / ${rack.name} · ${slot}` : 'Chưa phân bổ'}</p></button>;

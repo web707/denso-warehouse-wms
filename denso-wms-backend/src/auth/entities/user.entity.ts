@@ -3,7 +3,10 @@ import { BaseEntity } from '../../common/entities/base.entity';
 
 export enum UserRole {
   ADMIN = 'admin',
-  USER = 'user',
+  WAREHOUSE_MANAGER = 'warehouse_manager',
+  DIRECTOR = 'director',
+  WAREHOUSE_STAFF = 'warehouse_staff',
+  USER = 'user', // Legacy accounts remain read-only until assigned a role.
 }
 
 @Entity('users')

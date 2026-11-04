@@ -246,7 +246,7 @@ export default function Reports() {
         <Kpi label="Kệ đang dùng" value={`${totals.usedRacks}/${zoneRacks.length}`} />
         <Kpi label="Thùng" value={fmtNum(totals.cartons)} />
         <Kpi label="Khối lượng" value={fmtNum(totals.weight)} unit="kg" />
-        <Kpi label="Lô linh kiện" value={fmtNum(orders.length)} />
+        <Kpi label="Lô hàng" value={fmtNum(orders.length)} />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-4">

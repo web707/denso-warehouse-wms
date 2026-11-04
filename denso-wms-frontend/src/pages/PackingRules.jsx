@@ -33,7 +33,7 @@ export default function PackingRules() {
     <div className="p-4 sm:p-6 md:p-8 max-w-5xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Quy ước lưu kho</h1>
-        <p className="text-sm text-slate-500 mt-1">Thông số kỹ thuật và nguyên tắc phân bổ linh kiện trên kệ kho</p>
+        <p className="text-sm text-slate-500 mt-1">Thông số kỹ thuật và nguyên tắc phân bổ sản phẩm trên kệ kho</p>
       </div>
 
       <Card>
@@ -41,7 +41,7 @@ export default function PackingRules() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Warehouse className="w-5 h-5 text-indigo-600" />
-              <CardTitle>Kệ linh kiện tiêu chuẩn</CardTitle>
+              <CardTitle>Kệ sản phẩm tiêu chuẩn</CardTitle>
             </div>
             <Badge className="bg-indigo-600">5 × 4 = 20 ô</Badge>
           </div>

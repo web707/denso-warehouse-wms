@@ -173,7 +173,7 @@ export default function Inspections() {
       </div>
 
       <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-700">
-        Lưu ý: cấu trúc dữ liệu Khâu 4 là dữ liệu giả lập (DENSO và Oracle chưa công bố định dạng chính thức).
+        Lưu ý: cấu trúc dữ liệu Khâu 4 là dữ liệu giả lập (định dạng tích hợp trong demo chưa được xác minh theo tiêu chuẩn Masan).
       </p>
 
       <div className="rounded-xl border border-slate-200 bg-white grid grid-cols-2 lg:grid-cols-4 overflow-hidden [&>*]:border-slate-200 [&>*:nth-child(2n)]:border-l lg:[&>*]:border-l [&>*:first-child]:border-l-0 [&>*:nth-child(n+3)]:border-t lg:[&>*:nth-child(n+3)]:border-t-0">

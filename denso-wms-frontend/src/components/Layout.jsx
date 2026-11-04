@@ -3,10 +3,12 @@ import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Package, Warehouse, ClipboardList, RotateCcw, History as HistoryIcon,
   ArrowRightLeft, QrCode, MapPinned, BarChart3, Factory, ShieldCheck, Truck, GitBranch, Menu, PanelLeftClose, PanelLeftOpen,
-  Sun, Moon, Monitor,
+  Sun, Moon, Monitor, LogOut, CalendarClock, UsersRound, Eye,
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
+import { useAuth } from '@/lib/auth';
 import { useTheme } from '@/lib/theme';
+import { ROLE_LABELS, isReadOnly } from '@/lib/access';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -21,7 +23,8 @@ const navGroups = [
     items: [
       { to: '/', label: 'Tổng quan', icon: LayoutDashboard, end: true },
       { to: '/inventory', label: 'Nhập · Xuất · Điều chuyển', short: 'Nhập · Xuất', icon: ArrowRightLeft },
-      { to: '/orders', label: 'Lô linh kiện', icon: Package },
+      { to: '/orders', label: 'Lô hàng · SKU', icon: Package },
+      { to: '/fefo', label: 'Hàng cũ · mới (FEFO)', short: 'FEFO', icon: CalendarClock },
       { to: '/qr-labels', label: 'QR & Barcode kho', short: 'QR', icon: QrCode },
     ],
   },
@@ -47,6 +50,7 @@ const navGroups = [
     items: [
       { to: '/reports', label: 'Báo cáo kho', icon: BarChart3 },
       { to: '/history', label: 'Lịch sử kho', icon: HistoryIcon },
+      { to: '/users', label: 'Nhân sự & phân quyền', icon: UsersRound, adminOnly: true },
     ],
   },
 ];
@@ -73,6 +77,7 @@ function WithTip({ enabled, label, children }) {
 
 function SidebarBody({ collapsed = false, onNavigate, onToggleCollapse }) {
   const { resetData } = useStore();
+  const { logout, user } = useAuth();
   const { theme, setTheme } = useTheme();
   const ThemeIcon = THEME_META[theme].icon;
 
@@ -82,13 +87,13 @@ function SidebarBody({ collapsed = false, onNavigate, onToggleCollapse }) {
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
       <div className={cn('flex items-center h-16 shrink-0 border-b border-sidebar-border', collapsed ? 'justify-center' : 'gap-3 px-5')}>
-        <div className="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center shrink-0">
+        <div className="w-9 h-9 rounded-lg bg-emerald-600 flex items-center justify-center shrink-0">
           <Warehouse className="w-5 h-5 text-white" />
         </div>
         {!collapsed && (
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-white leading-tight truncate">DENSO WMS</p>
-            <p className="text-[11px] text-sidebar-foreground/70 truncate">Kho linh kiện ô tô</p>
+            <p className="text-sm font-semibold text-white leading-tight truncate">MASAN CONSUMER WMS</p>
+            <p className="text-[11px] text-sidebar-foreground/70 truncate">Trung tâm phân phối FMCG</p>
           </div>
         )}
       </div>
@@ -101,7 +106,7 @@ function SidebarBody({ collapsed = false, onNavigate, onToggleCollapse }) {
             ) : (
               <p className="px-3 pb-1 text-xs font-medium text-sidebar-foreground/50">{group.label}</p>
             )}
-            {group.items.map((item) => (
+            {group.items.filter((item) => !item.adminOnly || user?.role === 'admin').map((item) => (
               <WithTip key={item.to} enabled={collapsed} label={item.label}>
                 <NavLink
                   to={item.to}
@@ -128,6 +133,8 @@ function SidebarBody({ collapsed = false, onNavigate, onToggleCollapse }) {
       </nav>
 
       <div className="shrink-0 border-t border-sidebar-border p-3 space-y-1">
+        {!collapsed && user && <div className="rounded-lg bg-sidebar-accent/40 px-3 py-2 mb-2"><p className="text-xs font-semibold truncate text-white">{user.fullName || user.email}</p><p className="text-[11px] text-sidebar-foreground/70 mt-1">{ROLE_LABELS[user.role] || 'Nhân sự'}</p></div>}
+        <button type="button" onClick={logout} className="flex w-full items-center gap-3 h-10 px-3 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-white transition"><LogOut className="h-4 w-4" /><span className={collapsed ? "sr-only" : ""}>Đăng xuất</span></button>
         <WithTip enabled={collapsed} label={THEME_META[theme].label}>
           <button
             type="button"
@@ -183,6 +190,7 @@ function SidebarBody({ collapsed = false, onNavigate, onToggleCollapse }) {
 
 export default function Layout() {
   const location = useLocation();
+  const { user } = useAuth();
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem('wms-sidebar-collapsed') === '1'; } catch { return false; }
   });
@@ -210,10 +218,10 @@ export default function Layout() {
         </aside>
 
         <header className="md:hidden fixed top-0 inset-x-0 h-14 z-30 flex items-center gap-3 px-4 bg-sidebar text-white border-b border-sidebar-border">
-          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center shrink-0">
             <Warehouse className="w-4 h-4 text-white" />
           </div>
-          <p className="text-sm font-semibold truncate">{current?.label || 'DENSO WMS'}</p>
+          <p className="text-sm font-semibold truncate">{current?.label || 'MASAN CONSUMER WMS'}</p>
         </header>
 
         <nav
@@ -260,6 +268,8 @@ export default function Layout() {
             collapsed ? 'md:ml-[72px]' : 'md:ml-72',
           )}
         >
+          {user?.role === 'warehouse_staff' && <div className="mx-4 mt-4 sm:mx-6 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900"><Eye className="w-4 h-4 shrink-0"/>Nhân viên kho: được xem hệ thống, ghi nhận nhập/xuất/điều chuyển và kiểm định. Quản lý danh mục và giao hàng cần quyền quản lý.</div>}
+          {isReadOnly(user?.role) && <div className="mx-4 mt-4 sm:mx-6 flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800"><Eye className="w-4 h-4 shrink-0"/>Tài khoản {ROLE_LABELS[user?.role] || 'hiện tại'} có quyền xem; thao tác ghi dữ liệu bị giới hạn.</div>}
           <Outlet />
         </main>
       </div>

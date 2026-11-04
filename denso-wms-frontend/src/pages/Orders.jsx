@@ -19,13 +19,13 @@ export default function Orders() {
   const navigate = useNavigate();
   const [addOrderOpen, setAddOrderOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [newOrder, setNewOrder] = useState({ orderNumber: '', name: '', division: '', destination: 'DENSO-WH' });
+  const [newOrder, setNewOrder] = useState({ orderNumber: '', name: '', division: '', destination: 'DC-HN-01' });
 
   const handleAddOrder = async (e) => {
     e.preventDefault();
     if (!newOrder.orderNumber) return;
     const order = await addOrder(newOrder);
-    setNewOrder({ orderNumber: '', name: '', division: '', destination: 'DENSO-WH' });
+    setNewOrder({ orderNumber: '', name: '', division: '', destination: 'DC-HN-01' });
     setAddOrderOpen(false);
     // Jump straight into the new (still empty) order's own page.
     navigate(`/orders/${order.id}`);
@@ -35,12 +35,12 @@ export default function Orders() {
     <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Lô linh kiện & Vật tư</h1>
-          <p className="text-sm text-slate-500 mt-1">Quản lý lô linh kiện, PART và vị trí lưu kho</p>
+          <h1 className="text-2xl font-semibold text-slate-900">Lô hàng & Hàng hóa</h1>
+          <p className="text-sm text-slate-500 mt-1">Quản lý lô sản phẩm, PART và vị trí lưu kho</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setAddOrderOpen(true)}>
-            <Plus className="w-4 h-4 mr-1.5" /> Lô linh kiện
+            <Plus className="w-4 h-4 mr-1.5" /> Lô hàng
           </Button>
           <Button onClick={() => setWizardOpen(true)}>
             <Package className="w-4 h-4 mr-1.5" /> Bắt đầu phân hàng mới
@@ -51,7 +51,7 @@ export default function Orders() {
       {orders.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="py-12 text-center text-sm text-slate-400">
-            Chưa có đơn hàng nào. Nhấn "Lô linh kiện" để tạo đơn hàng đầu tiên.
+            Chưa có đơn hàng nào. Nhấn "Lô hàng" để tạo đơn hàng đầu tiên.
           </CardContent>
         </Card>
       ) : (
@@ -86,15 +86,15 @@ export default function Orders() {
       <Dialog open={addOrderOpen} onOpenChange={setAddOrderOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Thêm lô linh kiện mới</DialogTitle>
+            <DialogTitle>Thêm lô sản phẩm mới</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleAddOrder} className="space-y-4">
             <div className="space-y-1.5">
-              <Label>Tên lô linh kiện</Label>
+              <Label>Tên lô sản phẩm</Label>
               <Input
                 value={newOrder.name}
                 onChange={(e) => setNewOrder({ ...newOrder, name: e.target.value })}
-                placeholder="VD: Lô linh kiện tháng 8"
+                placeholder="VD: Lô hàng tháng 8"
                 required
               />
             </div>
@@ -113,10 +113,10 @@ export default function Orders() {
             </div>
             <div className="space-y-1.5">
               <Label>Kho đích</Label>
-              <Input value={newOrder.destination} onChange={(e) => setNewOrder({ ...newOrder, destination: e.target.value })} placeholder="DENSO-WH" />
+              <Input value={newOrder.destination} onChange={(e) => setNewOrder({ ...newOrder, destination: e.target.value })} placeholder="VD: DC-HN-01" />
             </div>
             <p className="text-xs text-slate-400">
-              Lô linh kiện sẽ được tạo trống — thêm hàng bằng tay ("Thêm hàng") hoặc nhập từ file ("Nhập file") ở trang của đơn hàng này.
+              Lô hàng sẽ được tạo trống — thêm hàng bằng tay ("Thêm hàng") hoặc nhập từ file ("Nhập file") ở trang của đơn hàng này.
             </p>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setAddOrderOpen(false)}>Hủy</Button>
