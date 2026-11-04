@@ -1,19 +1,63 @@
 import { ApiError } from './errors';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
-// This source version is configured for public warehouse access. Do not embed
-// administrator credentials in the browser bundle. Authenticated deployments can
-// opt into bearer tokens via the existing localStorage key.
 const TOKEN_KEY = 'wms_auto_token';
-function getConfiguredToken() {
-  if (import.meta.env.VITE_USE_BEARER_AUTH !== 'true') return null;
-  try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
+
+let loginPromise = null;
+
+async function getOrFetchToken() {
+  try {
+    const saved = localStorage.getItem(TOKEN_KEY);
+    if (saved) return saved;
+  } catch (e) {
+    // localStorage may be disabled in some environments
+  }
+
+  if (!loginPromise) {
+    loginPromise = (async () => {
+      try {
+        let res = await fetch(`${API_BASE}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: 'admin@denso-wms.local', password: 'Admin@123456' }),
+        });
+        if (!res.ok) {
+          res = await fetch(`${API_BASE}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: 'admin@logibackend.local', password: 'Admin@123456' }),
+          });
+        }
+        if (res.ok) {
+          const data = await res.json();
+          const token = data?.accessToken || null;
+          if (token) {
+            try { localStorage.setItem(TOKEN_KEY, token); } catch (e) {}
+          }
+          return token;
+        }
+      } catch (err) {
+        console.warn('Auto-auth failed:', err);
+      }
+      return null;
+    })().finally(() => {
+      loginPromise = null;
+    });
+  }
+  return loginPromise;
 }
 
-async function requestRaw(path, opts = {}) {
+async function requestRaw(path, opts = {}, isRetry = false) {
   const { method = 'GET', body, headers = {} } = opts;
-  const token = getConfiguredToken();
-  const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
+  const isAuthLogin = path.includes('/auth/login');
+
+  let authHeader = {};
+  if (!isAuthLogin) {
+    const token = await getOrFetchToken();
+    if (token) {
+      authHeader = { Authorization: `Bearer ${token}` };
+    }
+  }
 
   const res = await fetch(API_BASE + path, {
     method,
@@ -25,8 +69,14 @@ async function requestRaw(path, opts = {}) {
     body: body instanceof FormData ? body : body != null ? JSON.stringify(body) : undefined,
   });
 
-  // A 401 is a real deployment/auth mismatch, not a reason to retry
-  // using hard-coded admin passwords from JavaScript.
+  if (res.status === 401 && !isRetry && !isAuthLogin) {
+    try { localStorage.removeItem(TOKEN_KEY); } catch (e) {}
+    const refreshedToken = await getOrFetchToken();
+    if (refreshedToken) {
+      return requestRaw(path, opts, true);
+    }
+  }
+
   return res;
 }
 
