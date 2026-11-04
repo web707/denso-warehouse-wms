@@ -26,7 +26,13 @@ export default function Login() {
     try {
       await login(username.trim(), password);
       navigate(location.state?.from || '/', { replace: true });
-    } catch { setError('Tài khoản hoặc mật khẩu không đúng. Vui lòng thử lại.'); }
+    } catch (err) {
+      if (err?.status === 429 || (err?.message && err.message.includes('Too Many Requests'))) {
+        setError('Máy chủ Cloud tạm thời giới hạn tần suất do thử nhiều lần. Vui lòng đợi 1-2 phút hoặc khởi động lại dịch vụ.');
+      } else {
+        setError('Tài khoản hoặc mật khẩu không đúng. Vui lòng thử lại.');
+      }
+    }
     finally { setBusy(false); }
   };
   return (
@@ -64,7 +70,7 @@ export default function Login() {
               </span>
             </label>
             {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-            <button disabled={busy} type="submit" className="w-full rounded-xl h-12 bg-[#08754f] hover:bg-[#075f42] disabled:opacity-70 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-800/10 transition">{busy ? 'Đang xác thực...' : <>Đăng nhập <ArrowRight className="h-4 w-4" /></>}</button>
+            <button disabled={busy} type="submit" className="w-full rounded-xl h-12 bg-[#08754f] hover:bg-[#075f42] disabled:opacity-70 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-800/10 transition">{busy ? 'Đang kết nối Cloud...' : <>Đăng nhập <ArrowRight className="h-4 w-4" /></>}</button>
           </form>
           <div className="mt-9 flex items-center justify-center gap-2 text-xs text-slate-400"><ShieldCheck className="h-4 w-4 text-emerald-600" /> Phiên đăng nhập được bảo vệ bằng xác thực bảo mật</div>
         </div>
