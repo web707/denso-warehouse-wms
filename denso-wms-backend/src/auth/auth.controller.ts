@@ -1,6 +1,6 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthResponseDto } from './dto/auth-response.dto';
@@ -22,7 +22,7 @@ export class AuthController {
     return this.authService.register(dto.email, dto.password, dto.fullName);
   }
 
-  @Throttle({ default: { limit: 5, ttl: 900_000 } })
+  @SkipThrottle()
   @Post('login')
   @HttpCode(HttpStatus.OK)
   login(@Body() dto: LoginDto): Promise<AuthResponseDto> {

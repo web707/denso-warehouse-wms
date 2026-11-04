@@ -14,6 +14,16 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
 
+  // Trust reverse proxy (Render / Vercel) so client IP is accurately extracted for rate limiting
+  try {
+    const httpAdapter = app.getHttpAdapter().getInstance();
+    if (httpAdapter && typeof httpAdapter.set === 'function') {
+      httpAdapter.set('trust proxy', 1);
+    }
+  } catch (err) {
+    // ignore if adapter does not support set
+  }
+
   app.use(helmet());
   app.use(compression());
   app.use(cookieParser());
