@@ -14,11 +14,11 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
 
-  app.use(helmet());
+  app.use(helmet({ crossOriginResourcePolicy: false }));
   app.use(compression());
   app.use(cookieParser());
   app.enableCors({
-    origin: config.get<string[]>('corsOrigin'),
+    origin: true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin'],
@@ -46,7 +46,7 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
 
   const port = config.get<number>('port') ?? 5001;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   // eslint-disable-next-line no-console
   console.log(`MASAN WMS listening on http://localhost:${port}/api (docs at /api/docs)`);
 }

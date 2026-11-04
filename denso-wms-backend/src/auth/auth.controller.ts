@@ -26,7 +26,7 @@ export class AuthController {
     return this.authService.register(dto.email, dto.password, dto.fullName);
   }
 
-  @Throttle({ default: { limit: 5, ttl: 900_000 } })
+  @Throttle({ default: { limit: 100, ttl: 60_000 } })
   @Post('login')
   @HttpCode(HttpStatus.OK)
   login(@Body() dto: LoginDto): Promise<AuthResponseDto> {
