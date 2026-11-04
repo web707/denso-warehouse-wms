@@ -233,12 +233,20 @@ export default function WarehouseScene3D({
   warehouseCode = 'DENSO-WH',
   zoneCode = 'ZONE-A',
   className,
-  initialHeatmap = true,
+  initialHeatmap = false,
   heatmapData: externalHeatmapData,
 }) {
   const [showHeatmap, setShowHeatmap] = useState(initialHeatmap);
   const [internalHeatmapData, setInternalHeatmapData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  useEffect(() => {
+    const refresh = () => setRefreshKey((v) => v + 1);
+    const onStorage = (event) => { if (event.key === 'wms_inventory_committed') refresh(); };
+    window.addEventListener('wms-inventory-committed', refresh);
+    window.addEventListener('storage', onStorage);
+    return () => { window.removeEventListener('wms-inventory-committed', refresh); window.removeEventListener('storage', onStorage); };
+  }, []);
 
   // Fetch heatmap data from API if not provided via props
   useEffect(() => {
@@ -265,7 +273,7 @@ export default function WarehouseScene3D({
     return () => {
       cancelled = true;
     };
-  }, [warehouseCode, zoneCode, externalHeatmapData]);
+  }, [warehouseCode, zoneCode, externalHeatmapData, refreshKey]);
 
   const heatmapData = externalHeatmapData || internalHeatmapData;
 

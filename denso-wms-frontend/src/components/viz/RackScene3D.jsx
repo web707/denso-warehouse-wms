@@ -255,10 +255,18 @@ export default function RackScene3D({
   rackId,
   rackName,
   rackHeatmap: externalRackHeatmap,
-  initialHeatmap = true,
+  initialHeatmap = false,
 }) {
   const [showHeatmap, setShowHeatmap] = useState(initialHeatmap);
   const [internalHeatmapData, setInternalHeatmapData] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  useEffect(() => {
+    const refresh = () => setRefreshKey((v) => v + 1);
+    const onStorage = (event) => { if (event.key === 'wms_inventory_committed') refresh(); };
+    window.addEventListener('wms-inventory-committed', refresh);
+    window.addEventListener('storage', onStorage);
+    return () => { window.removeEventListener('wms-inventory-committed', refresh); window.removeEventListener('storage', onStorage); };
+  }, []);
 
   // Auto-fetch heatmap data if not passed from parent
   useEffect(() => {
@@ -276,7 +284,7 @@ export default function RackScene3D({
     return () => {
       cancelled = true;
     };
-  }, [externalRackHeatmap]);
+  }, [externalRackHeatmap, refreshKey]);
 
   const currentRackHeat = useMemo(() => {
     if (externalRackHeatmap) return externalRackHeatmap;

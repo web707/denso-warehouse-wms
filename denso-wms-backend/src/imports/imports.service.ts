@@ -381,14 +381,28 @@ export class ImportsService {
 
   private async readRows(fileBuffer: Buffer): Promise<{ rows: RawRow[]; containerHint?: string }> {
     const workbook = new ExcelJS.Workbook();
+    let loaded = false;
     try {
       await workbook.xlsx.load(fileBuffer as unknown as ExcelJS.Buffer);
+      loaded = true;
     } catch {
-      throw new BadRequestException({
-        code: 'INVALID_XLSX',
-        message: 'File không đúng định dạng .xlsx',
-      });
+      // Not a valid xlsx, try CSV
     }
+
+    if (!loaded) {
+      try {
+        const { Readable } = await import('stream');
+        const stream = Readable.from([fileBuffer]);
+        await workbook.csv.read(stream);
+        loaded = true;
+      } catch {
+        throw new BadRequestException({
+          code: 'INVALID_FILE',
+          message: 'File không đúng định dạng .xlsx hoặc .csv',
+        });
+      }
+    }
+
     const sheet = workbook.worksheets[0];
     if (!sheet) {
       throw new BadRequestException({ code: 'EMPTY_WORKBOOK', message: 'File không có sheet nào' });
@@ -397,7 +411,7 @@ export class ImportsService {
     const headerRow = sheet.getRow(1);
     const headerIndex = new Map<string, number>();
     headerRow.eachCell((cell, colNumber) => {
-      const key = String(cell.value ?? '').trim();
+      const key = String(cell.value ?? '').trim().replace(/^\uFEFF/, '');
       if (key) headerIndex.set(key, colNumber);
     });
 

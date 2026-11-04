@@ -71,7 +71,11 @@ export default function RackPlan() {
     }
   }, [rackId]);
 
-  useEffect(() => { loadPlan(); }, [loadPlan]);
+  const inventoryVersion = useMemo(() => parts
+    .filter((p) => p.rackId === rackId)
+    .map((p) => `${p.id}:${p.quantity}:${p.cartons}:${p.weight}:${p.preferredRackSlot}`)
+    .sort().join('|'), [parts, rackId]);
+  useEffect(() => { loadPlan(); }, [loadPlan, inventoryVersion]);
 
   const handleSolve = async () => {
     setSolving(true);

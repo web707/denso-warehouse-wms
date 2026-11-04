@@ -60,7 +60,7 @@ export class ImportsController {
     @Query('targetRackId') targetRackId?: string,
   ): Promise<ImportResult> {
     if (!file) {
-      throw new BadRequestException({ code: 'FILE_REQUIRED', message: 'Thiếu file .xlsx' });
+      throw new BadRequestException({ code: 'FILE_REQUIRED', message: 'Thiếu file .xlsx hoặc .csv' });
     }
     const isDryRun = dryRun !== 'false';
     return this.service.parseAndMaybeCommit(

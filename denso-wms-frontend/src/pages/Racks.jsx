@@ -22,6 +22,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   MapPinned,
+  ArrowRightLeft,
 } from 'lucide-react';
 import WarehouseScene3D from '@/components/viz/WarehouseScene3D';
 import { RACKS_PER_ZONE, RACK_STATUS_META, SLOTS_PER_RACK, WAREHOUSE_CODE, compareRacks, slotCode, summarizeRack, zoneOf } from '@/lib/warehouse';
@@ -30,7 +31,7 @@ const TARGET_RACKS = RACKS_PER_ZONE;
 const STATUS_META = RACK_STATUS_META;
 
 export default function Racks() {
-  const { orders, parts, racks, rackTypes, currentOrderId, initializeWarehouse } = useStore();
+  const { orders, parts, racks, rackTypes, currentOrderId, initializeWarehouse, applyInventorySnapshot, refetchParts } = useStore();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
@@ -38,6 +39,12 @@ export default function Racks() {
   const [selectedRackId, setSelectedRackId] = useState(null);
   const [initializing, setInitializing] = useState(false);
   const [zones, setZones] = useState([]);
+  const [transferMode, setTransferMode] = useState(false);
+  const [sourceRackId, setSourceRackId] = useState('');
+  const [movingPartId, setMovingPartId] = useState('');
+  const [targetRackId, setTargetRackId] = useState('');
+  const [targetSlot, setTargetSlot] = useState('');
+  const [moving, setMoving] = useState(false);
 
   const selectedZone = (searchParams.get('zone') || 'ZONE-A').toUpperCase();
 
@@ -118,6 +125,60 @@ export default function Racks() {
     navigate(`/racks/${rackId}/plan${suffix}`);
   };
 
+  const sourceRack = racks.find((r) => r.id === sourceRackId);
+  const sourceParts = parts.filter((p) => p.rackId === sourceRackId && (p.quantity > 0 || p.cartons > 0 || p.weight > 0));
+  const movingPart = parts.find((p) => p.id === movingPartId);
+  const targetRack = racks.find((r) => r.id === targetRackId);
+  const rackLabel = (r) => `${r.warehouseCode || WAREHOUSE_CODE} / ${zoneOf(r)} / ${r.name}`;
+  const destinationRacks = [...racks].filter((r) => r.id !== sourceRackId || racks.length === 1)
+    .sort((a, b) => rackLabel(a).localeCompare(rackLabel(b), 'vi'));
+  const usedTargetSlots = new Set(parts.filter((p) => p.rackId === targetRackId && p.id !== movingPartId)
+    .map((p) => p.preferredRackSlot).filter(Number.isInteger));
+
+  const handle3DRackClick = (rackId) => {
+    setSelectedRackId(rackId);
+    if (!transferMode) { openRack(rackId); return; }
+    if (movingPartId && sourceRackId && rackId !== sourceRackId) {
+      setTargetRackId(rackId);
+      setTargetSlot('');
+      return;
+    }
+    setSourceRackId(rackId);
+    setMovingPartId('');
+    setTargetRackId('');
+    setTargetSlot('');
+  };
+
+  const submit3DTransfer = async () => {
+    if (!movingPart || !sourceRack || !targetRack || moving) return;
+    if (sourceRackId === targetRackId && targetSlot !== '' && Number(targetSlot) === movingPart.preferredRackSlot) {
+      toast({ variant: 'destructive', title: 'Vị trí không thay đổi', description: 'Hãy chọn một ô khác ô nguồn.' });
+      return;
+    }
+    setMoving(true);
+    try {
+      const tx = await api.inventory.create({
+        type: 'transfer', partId: movingPart.id,
+        quantityPcs: 0, cartonCount: 0, weightKg: 0,
+        toRackId: targetRackId,
+        ...(targetSlot !== '' ? { toSlot: Number(targetSlot) } : {}),
+        note: `Điều chuyển từ sơ đồ 3D: ${rackLabel(sourceRack)} → ${rackLabel(targetRack)}`,
+      });
+      if (tx.partSnapshot) applyInventorySnapshot(tx.partSnapshot);
+      else await refetchParts();
+      try { localStorage.setItem('wms_inventory_committed', String(Date.now())); } catch { /* browser policy */ }
+      window.dispatchEvent(new Event('wms-inventory-committed'));
+      toast({ title: 'Điều chuyển thành công', description: `${movingPart.partName}: ${rackLabel(sourceRack)} → ${rackLabel(targetRack)} · S${String(Number(tx.toSlot ?? tx.partSnapshot?.preferredRackSlot ?? 0) + 1).padStart(2, '0')}` });
+      setMovingPartId('');
+      setSourceRackId('');
+      setTargetRackId('');
+      setTargetSlot('');
+      setSelectedRackId(null);
+    } catch (err) {
+      toast({ variant: 'destructive', title: 'Không thể điều chuyển', description: err.message });
+    } finally { setMoving(false); }
+  };
+
   const switchZone = (zoneCode) => {
     setSelectedRackId(null);
     setSearch('');
@@ -156,14 +217,56 @@ export default function Racks() {
     </div>
 
     <Card>
+      <CardContent className="pt-5 space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div><h2 className="font-semibold text-slate-900 flex gap-2 items-center"><ArrowRightLeft className="w-4 h-4" /> Điều chuyển hàng trực tiếp trên sơ đồ 3D</h2>
+            <p className="text-xs text-slate-500 mt-1">Chuyển toàn bộ PART sang kệ hoặc Zone khác; chỉ thay đổi mô hình khi backend lưu thành công.</p></div>
+          <Button variant={transferMode ? 'default' : 'outline'} onClick={() => { setTransferMode((v) => !v); setSourceRackId(''); setMovingPartId(''); setTargetRackId(''); setTargetSlot(''); }}>
+            {transferMode ? 'Thoát chế độ điều chuyển' : 'Bật điều chuyển 3D'}
+          </Button>
+        </div>
+        {transferMode && <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 rounded-xl border bg-slate-50 p-4">
+          <label className="text-xs font-semibold text-slate-600">1. Kệ nguồn (click trên 3D)
+            <select className="block mt-1 h-10 w-full rounded-md border bg-white px-2" value={sourceRackId} onChange={(e) => { setSourceRackId(e.target.value); setMovingPartId(''); setTargetRackId(''); setTargetSlot(''); }}>
+              <option value="">Chọn kệ nguồn...</option>
+              {racks.filter((r) => parts.some((p) => p.rackId === r.id)).map((r) => <option key={r.id} value={r.id}>{rackLabel(r)}</option>)}
+            </select>
+          </label>
+          <label className="text-xs font-semibold text-slate-600">2. PART cần chuyển
+            <select className="block mt-1 h-10 w-full rounded-md border bg-white px-2" value={movingPartId} onChange={(e) => { setMovingPartId(e.target.value); setTargetRackId(''); setTargetSlot(''); }} disabled={!sourceRackId}>
+              <option value="">Chọn PART...</option>
+              {sourceParts.map((p) => <option key={p.id} value={p.id}>{p.partName} · {p.quantity} cái · {p.cartons} thùng</option>)}
+            </select>
+          </label>
+          <label className="text-xs font-semibold text-slate-600">3. Kệ đích (có thể click trên 3D)
+            <select className="block mt-1 h-10 w-full rounded-md border bg-white px-2" value={targetRackId} onChange={(e) => { setTargetRackId(e.target.value); setTargetSlot(''); }} disabled={!movingPartId}>
+              <option value="">Chọn kho / Zone / kệ đích...</option>
+              {destinationRacks.map((r) => <option key={r.id} value={r.id}>{rackLabel(r)}</option>)}
+            </select>
+          </label>
+          <label className="text-xs font-semibold text-slate-600">4. Ô nhận hàng
+            <select className="block mt-1 h-10 w-full rounded-md border bg-white px-2" value={targetSlot} onChange={(e) => setTargetSlot(e.target.value)} disabled={!targetRackId}>
+              <option value="">Tự chọn ô trống an toàn</option>
+              {Array.from({ length: 20 }, (_, i) => i).filter((i) => !usedTargetSlots.has(i) && !(sourceRackId === targetRackId && movingPart?.preferredRackSlot === i)).map((i) => <option key={i} value={i}>S{String(i + 1).padStart(2, '0')}</option>)}
+            </select>
+          </label>
+          <div className="md:col-span-2 xl:col-span-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-slate-600">{movingPart ? `Chuyển toàn bộ ${movingPart.quantity} cái, ${movingPart.cartons} thùng, ${movingPart.weight} kg từ ${rackLabel(sourceRack)} sang ${targetRack ? rackLabel(targetRack) : 'kệ đích...'}.` : 'Chọn kệ có hàng → PART → kệ đích → xác nhận. Sơ đồ nguồn sẽ tự cập nhật sau khi hoàn tất.'}</p>
+            <Button onClick={submit3DTransfer} disabled={!movingPartId || !targetRackId || moving}>{moving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Đang chuyển...</> : <><ArrowRightLeft className="w-4 h-4 mr-2" />Xác nhận điều chuyển</>}</Button>
+          </div>
+        </div>}
+      </CardContent>
+    </Card>
+
+    <Card>
       <CardHeader className="pb-3"><div className="flex flex-wrap items-center justify-between gap-3">
-        <div><CardTitle className="text-base">Mô hình bên trong {selectedZone}</CardTitle><p className="text-xs text-slate-400 mt-1">Kéo để xoay · cuộn để zoom · hover xem nhanh · click kệ để mở chi tiết S01–S20</p></div>
+        <div><CardTitle className="text-base">Mô hình bên trong {selectedZone}</CardTitle><p className="text-xs text-slate-400 mt-1">Kéo để xoay · cuộn để zoom · hover xem nhanh · click kệ để chọn nguồn/đích khi bật điều chuyển, hoặc mở chi tiết S01–S20</p></div>
         <div className="relative w-full sm:w-[360px]"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" /><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={`Tìm PART trong ${selectedZone}...`} className="pl-9" /></div>
       </div></CardHeader>
       <CardContent className="space-y-3">
         {warehouseRacks.length === 0 ? <div className="h-[520px] rounded-xl border border-dashed flex flex-col items-center justify-center text-center p-8">
           <Warehouse className="w-12 h-12 text-slate-300 mb-3" /><p className="font-semibold text-slate-700">{selectedZone} chưa có kệ</p><p className="text-sm text-slate-400 mt-1 max-w-md">Đây là Zone độc lập. Bấm “Khởi tạo đủ 20 kệ” để tạo R01–R20 mới cho riêng {selectedZone}.</p><Button className="mt-4" onClick={handleInitialize} disabled={initializing || !anchorOrderId}>{initializing ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Sparkles className="w-4 h-4 mr-1.5" />}Khởi tạo {selectedZone}</Button>
-        </div> : <WarehouseScene3D racks={rackSummaries} selectedRackId={selectedRackId} highlightedRackIds={highlightedRackIds} onSelectRack={(id) => { setSelectedRackId(id); openRack(id); }} warehouseCode={WAREHOUSE_CODE} zoneCode={selectedZone} className="rounded-xl overflow-hidden border" />}
+        </div> : <WarehouseScene3D racks={rackSummaries} selectedRackId={selectedRackId} highlightedRackIds={highlightedRackIds} onSelectRack={handle3DRackClick} warehouseCode={WAREHOUSE_CODE} zoneCode={selectedZone} className="rounded-xl overflow-hidden border" />}
         <div className="flex flex-wrap gap-3 text-[11px] text-slate-500"><Legend swatch="bg-slate-400" label="Trống" /><Legend swatch="bg-emerald-500" label="Đang sử dụng" /><Legend swatch="bg-amber-500" label="Gần đầy (≥80%)" /><Legend swatch="bg-indigo-500" label="Đầy 20/20 ô" /><Legend swatch="bg-red-500" label="Quá tải" /></div>
       </CardContent>
     </Card>

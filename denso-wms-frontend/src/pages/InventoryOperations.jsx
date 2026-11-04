@@ -15,14 +15,14 @@ const TYPES = [
 const slotName = (i) => i === null || i === undefined ? '—' : `S${String(i + 1).padStart(2, '0')}`;
 
 export default function InventoryOperations() {
-  const { parts, racks, resetData } = useStore();
+  const { parts, racks, applyInventorySnapshot, refetchParts } = useStore();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const [type, setType] = useState('inbound');
   const [partId, setPartId] = useState('');
-  const [qty, setQty] = useState('0');
-  const [cartons, setCartons] = useState('0');
-  const [weight, setWeight] = useState('0');
+  const [qty, setQty] = useState('');
+  const [cartons, setCartons] = useState('');
+  const [weight, setWeight] = useState('');
   const [toRackId, setToRackId] = useState('');
   const [toSlot, setToSlot] = useState('');
   const [note, setNote] = useState('');
@@ -61,10 +61,19 @@ export default function InventoryOperations() {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!partId) return;
+    if (!partId || saving) return;
+    if (type === 'inbound' && !located && !toRackId) {
+      toast({ variant: 'destructive', title: 'Thiếu kệ nhận', description: 'Hãy chọn kệ để nhập hàng và cập nhật mô hình 3D.' });
+      return;
+    }
+    const numbers = [qty, cartons, weight].map((v) => Number(v || 0));
+    if (type !== 'transfer' && (!numbers.every(Number.isFinite) || numbers.some((n) => n < 0) || !Number.isInteger(numbers[0]) || !Number.isInteger(numbers[1]) || numbers.every((n) => n === 0))) {
+      toast({ variant: 'destructive', title: 'Số liệu không hợp lệ', description: 'Nhập số không âm, số cái/thùng là số nguyên và ít nhất một giá trị lớn hơn 0.' });
+      return;
+    }
     setSaving(true);
     try {
-      await api.inventory.create({
+      const committed = await api.inventory.create({
         type,
         partId,
         // Điều chuyển luôn chuyển toàn bộ PART nên không gửi số lượng đã nhập dở ở tab khác
@@ -76,9 +85,15 @@ export default function InventoryOperations() {
         toSlot: canPickTarget && toSlot !== '' ? Number(toSlot) : undefined,
         note: note || undefined,
       });
-      await Promise.all([resetData(), reloadTx()]);
+      if (committed.partSnapshot) applyInventorySnapshot(committed.partSnapshot);
+      // Other tabs can refetch without making this tab wait for an unnecessary full reset.
+      try { localStorage.setItem('wms_inventory_committed', String(Date.now())); } catch { /* restricted storage */ }
+      window.dispatchEvent(new Event('wms-inventory-committed'));
+      reloadTx().catch(console.error);
+      // Fallback for a backend deployment that has not yet been upgraded.
+      if (!committed.partSnapshot) await refetchParts();
       toast({ title: 'Đã ghi nhận nghiệp vụ kho', description: type === 'inbound' ? 'Nhập kho thành công' : type === 'outbound' ? 'Xuất kho thành công' : 'Điều chuyển thành công' });
-      setQty('0'); setCartons('0'); setWeight('0'); setNote('');
+      setQty(''); setCartons(''); setWeight(''); setNote('');
     } catch (err) {
       toast({ variant: 'destructive', title: 'Không thể thực hiện', description: err.message });
     } finally { setSaving(false); }
@@ -99,7 +114,7 @@ export default function InventoryOperations() {
         </div>
 
         <label className="block text-sm font-medium">PART
-          <select className="mt-1 w-full h-10 rounded-md border px-3 bg-white" value={partId} onChange={(e) => setPartId(e.target.value)} required>
+          <select className="mt-1 w-full h-10 rounded-md border px-3 bg-white" value={partId} onChange={(e) => { setPartId(e.target.value); setToRackId(''); setToSlot(''); }} required>
             <option value="">Chọn linh kiện...</option>
             {parts.map((p) => <option key={p.id} value={p.id}>{p.partName} · {p.productCode || p.masterPo}</option>)}
           </select>
@@ -107,7 +122,7 @@ export default function InventoryOperations() {
 
         {selected && <div className="rounded-xl bg-slate-50 border p-3 text-xs text-slate-600 grid grid-cols-2 gap-2">
           <span>Tồn: <b>{selected.quantity}</b> pcs</span><span><b>{selected.cartons}</b> thùng</span>
-          <span>{selected.weight.toLocaleString('vi-VN')} kg</span><span>{rackById[selected.rackId]?.name || 'Chưa xếp'} · {slotName(selected.preferredRackSlot)}</span>
+          <span>{Number(selected.weight || 0).toLocaleString('vi-VN')} kg</span><span>{rackById[selected.rackId]?.name || 'Chưa xếp'} · {slotName(selected.preferredRackSlot)}</span>
         </div>}
 
         {type !== 'transfer' && <div className="grid grid-cols-3 gap-2">
@@ -122,7 +137,7 @@ export default function InventoryOperations() {
         </div>}
 
         {isTransfer && selected && <p className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
-          Điều chuyển sẽ chuyển <b>toàn bộ PART</b> ({selected.quantity} cái, {selected.cartons} thùng, {selected.weight.toLocaleString('vi-VN')} kg). Chuyển một phần chưa được hỗ trợ.
+          Điều chuyển sẽ chuyển <b>toàn bộ PART</b> ({selected.quantity} cái, {selected.cartons} thùng, {Number(selected.weight || 0).toLocaleString('vi-VN')} kg). Chuyển một phần chưa được hỗ trợ.
         </p>}
 
         {type === 'inbound' && located && <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
@@ -132,7 +147,7 @@ export default function InventoryOperations() {
         {canPickTarget && <div className="grid grid-cols-2 gap-2">
           <label className="text-xs">Kệ đích
             <select className="mt-1 w-full h-10 rounded-md border px-2 bg-white" value={toRackId} onChange={(e) => setToRackId(e.target.value)}>
-              <option value="">{type === 'inbound' ? 'Giữ vị trí hiện tại' : 'Chọn kệ...'}</option>
+              <option value="">{type === 'inbound' ? 'Chọn kệ nhận...' : 'Chọn kệ...'}</option>
               {racks.map((r) => <option key={r.id} value={r.id}>{r.zoneCode} · {r.name}</option>)}
             </select>
           </label>

@@ -99,7 +99,7 @@ export function StoreProvider({ children }) {
 
   function resolveDivisionAndPrefix(divisionCode, dcPrefixCode) {
     const division = divisions.find((d) => d.code === String(divisionCode || '').trim().toUpperCase());
-    if (!division) throw new Error(`Division "${divisionCode}" không tồn tại`);
+    if (!division) throw new Error(divisionCode ? `Division \"${divisionCode}\" không tồn tại` : 'Bạn chưa chọn Division. Hãy chọn Division trước khi lưu PART.');
     const wantedPrefix = String(dcPrefixCode || '').trim().padStart(2, '0');
     const prefix = (division.dcPrefixes || []).find((p) => p.code === wantedPrefix);
     if (!prefix) throw new Error(`DC Prefix "${dcPrefixCode}" không thuộc Division "${divisionCode}"`);
@@ -167,7 +167,11 @@ export function StoreProvider({ children }) {
 
   const updatePart = useCallback(async (id, data) => {
     const previous = parts.find((p) => p.id === id);
-    await api.parts.update(id, toCreatePartBody(data));
+    await api.parts.update(id, toCreatePartBody({
+      ...data,
+      divisionCode: data.divisionCode || previous?.divisionCode,
+      dcPrefix: data.dcPrefix || previous?.dcPrefix,
+    }));
     await resolveRacks([previous?.rackId, data.rackId]);
     await Promise.all([refetchParts(), refetchRacks(), refetchHistory()]);
   }, [divisions, parts, resolveRacks, refetchParts, refetchRacks, refetchHistory]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -244,6 +248,28 @@ export function StoreProvider({ children }) {
   const deleteRule = useCallback(async (id) => { await api.packingRules.remove(id); await Promise.all([refetchRules(), refetchHistory()]); }, [refetchRules, refetchHistory]);
   const activeRules = packingRules.filter((r) => r.active !== false);
   const logExport = useCallback(() => { refetchHistory(); }, [refetchHistory]);
+  // Apply server-confirmed stock directly: 3D racks subscribe to this shared state.
+  const applyInventorySnapshot = useCallback((snapshot) => {
+    if (!snapshot?.id) return;
+    setParts((current) => current.map((p) => p.id === snapshot.id ? {
+      ...p,
+      quantity: snapshot.quantityPcs,
+      cartons: snapshot.cartonCount,
+      weight: Number(snapshot.totalWeightKg),
+      rackId: snapshot.rackId,
+      preferredRackSlot: snapshot.preferredRackSlot,
+    } : p));
+  }, []);
+
+  // Keep other open tabs consistent; event is fired only after the server commits.
+  useEffect(() => {
+    const onStorage = (event) => {
+      if (event.key === 'wms_inventory_committed') refetchParts().catch(console.error);
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [refetchParts]);
+
   const resetData = useCallback(async () => {
     await Promise.all([refetchOrders(), refetchParts(), refetchRacks(), refetchRules(), refetchHistory()]);
   }, [refetchOrders, refetchParts, refetchRacks, refetchRules, refetchHistory]);
@@ -254,7 +280,7 @@ export function StoreProvider({ children }) {
     addOrder, updateOrder, renameOrder, deleteOrder,
     addPart, updatePart, deletePart, assignPart,
     createRackForOrder, initializeWarehouse, autoAssignRack, updateRack, deleteRack,
-    addRule, updateRule, deleteRule, logExport, resetData,
+    addRule, updateRule, deleteRule, logExport, resetData, applyInventorySnapshot, refetchParts,
   };
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

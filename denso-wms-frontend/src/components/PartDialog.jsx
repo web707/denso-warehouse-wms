@@ -38,10 +38,13 @@ const UOM_OPTIONS = [
 ];
 
 export default function PartDialog({ open, onOpenChange, part, defaultOrderId }) {
-  const { orders, racks, addPart, updatePart, assignPart } = useStore();
+  const { orders, racks, divisions, addPart, updatePart, assignPart } = useStore();
+  const [submitError, setSubmitError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState(empty);
 
   useEffect(() => {
+    setSubmitError('');
     if (part) {
       setForm({
         ...empty,
@@ -57,11 +60,15 @@ export default function PartDialog({ open, onOpenChange, part, defaultOrderId })
         supplierId: String(part.supplierId ?? ''),
       });
     } else {
-      setForm({ ...empty, orderId: defaultOrderId || orders[0]?.id || '' });
+      const initialOrderId = defaultOrderId || orders[0]?.id || '';
+      const order = orders.find((o) => o.id === initialOrderId);
+      setForm({ ...empty, orderId: initialOrderId, divisionCode: order?.division || '' });
     }
   }, [part, open, orders, defaultOrderId]);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const chosenDivision = divisions.find((d) => d.code === form.divisionCode);
+  const availablePrefixes = chosenDivision?.dcPrefixes || [];
 
   const cbmPreview =
     form.cartonLength && form.cartonWidth && form.cartonHeight && form.cartons
@@ -75,6 +82,10 @@ export default function PartDialog({ open, onOpenChange, part, defaultOrderId })
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return;
+    setSubmitError('');
+    setSubmitting(true);
+    try {
     const data = {
       orderId: form.orderId,
       partName: form.partName,
@@ -106,6 +117,11 @@ export default function PartDialog({ open, onOpenChange, part, defaultOrderId })
       if (data.rackId && created?.id) await assignPart(created.id, data.rackId);
     }
     onOpenChange(false);
+    } catch (err) {
+      setSubmitError(err?.message || 'Không thể lưu PART');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -118,7 +134,10 @@ export default function PartDialog({ open, onOpenChange, part, defaultOrderId })
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Đơn hàng</Label>
-              <Select value={form.orderId} onValueChange={(v) => set('orderId', v)}>
+              <Select value={form.orderId} onValueChange={(v) => {
+                const order = orders.find((o) => o.id === v);
+                setForm((f) => ({ ...f, orderId: v, divisionCode: order?.division || f.divisionCode, dcPrefix: '' }));
+              }}>
                 <SelectTrigger><SelectValue placeholder="Chọn đơn hàng" /></SelectTrigger>
                 <SelectContent>
                   {orders.map((o) => (
@@ -140,8 +159,18 @@ export default function PartDialog({ open, onOpenChange, part, defaultOrderId })
               <Input value={form.masterPo} onChange={(e) => set('masterPo', e.target.value)} placeholder="M91846" />
             </div>
             <div className="space-y-1.5">
-              <Label>DC Prefix</Label>
-              <Input value={form.dcPrefix} onChange={(e) => set('dcPrefix', e.target.value)} placeholder="10" />
+              <Label>Division (bắt buộc)</Label>
+              <select className="h-10 w-full rounded-md border bg-white px-3 text-sm" value={form.divisionCode} required onChange={(e) => setForm((f) => ({ ...f, divisionCode: e.target.value, dcPrefix: '' }))}>
+                <option value="">Chọn Division...</option>
+                {divisions.map((d) => <option key={d.id} value={d.code}>{d.code}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>DC Prefix (bắt buộc)</Label>
+              <select className="h-10 w-full rounded-md border bg-white px-3 text-sm" value={form.dcPrefix} required onChange={(e) => set('dcPrefix', e.target.value)}>
+                <option value="">Chọn DC Prefix...</option>
+                {availablePrefixes.map((prefix) => <option key={prefix.id} value={prefix.code}>{prefix.code}</option>)}
+              </select>
             </div>
             <div className="space-y-1.5">
               <Label>Số PO</Label>
@@ -236,9 +265,10 @@ export default function PartDialog({ open, onOpenChange, part, defaultOrderId })
             </Select>
           </div>
 
+          {submitError && <p role="alert" className="text-sm text-red-600 bg-red-50 rounded-lg p-3">{submitError}</p>}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Hủy</Button>
-            <Button type="submit">{part ? 'Lưu thay đổi' : 'Thêm hàng'}</Button>
+            <Button type="submit" disabled={submitting || !chosenDivision || !form.dcPrefix}>{submitting ? 'Đang lưu...' : part ? 'Lưu thay đổi' : 'Thêm hàng'}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

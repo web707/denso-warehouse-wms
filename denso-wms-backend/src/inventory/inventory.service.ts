@@ -149,7 +149,10 @@ export class InventoryService {
     });
   }
 
-  async create(dto: CreateInventoryTransactionDto, user: AuthenticatedUser): Promise<InventoryTransaction> {
+  async create(dto: CreateInventoryTransactionDto, user: AuthenticatedUser): Promise<InventoryTransaction & { partSnapshot: {
+    id: string; quantityPcs: number; cartonCount: number; totalWeightKg: number;
+    rackId: string | null; preferredRackSlot: number | null;
+  } }> {
     return this.dataSource.transaction(async (em) => {
       await this.lockRow(em, 'parts', dto.partId);
       const part = await em.findOne(Part, { where: { id: dto.partId } });
@@ -181,9 +184,20 @@ export class InventoryService {
           slot = dto.toSlot;
         }
 
+        if (!rackId) {
+          throw new BadRequestException({ code: 'INBOUND_RACK_REQUIRED', message: 'Vui lòng chọn kệ nhận hàng để cập nhật mô hình kho 3D' });
+        }
         const newCartons = part.cartonCount + req.cartons;
         if (rackId) {
           await this.lockRow(em, 'containers', rackId);
+          if (slot === null || slot === undefined) {
+            const occupants = await em.find(Part, { where: { containerId: rackId } });
+            const busy = new Set(occupants.filter((p) => p.id !== part.id && p.preferredRackSlot !== null)
+              .map((p) => p.preferredRackSlot));
+            const free = Array.from({ length: 20 }, (_, i) => i).find((i) => !busy.has(i));
+            if (free === undefined) throw new BadRequestException({ code: 'RACK_FULL', message: 'Kệ không còn ô trống (S01–S20)' });
+            slot = free;
+          }
           const rack = await this.ensureSlotAvailable(em, part.id, rackId, slot);
           await this.checkCapacity(em, rack, part, {
             weightKg: stock.weightKg + req.weight,
@@ -215,20 +229,58 @@ export class InventoryService {
         if (!dto.toRackId) {
           throw new BadRequestException({ code: 'TRANSFER_RACK_REQUIRED', message: 'Điều chuyển cần chọn kệ đích' });
         }
+        if (!fromRackId) {
+          throw new BadRequestException({ code: 'TRANSFER_SOURCE_REQUIRED', message: 'PART chưa được xếp vào kệ, không thể điều chuyển từ sơ đồ kho' });
+        }
+        if (stock.quantityPcs === 0 && stock.cartonCount === 0 && stock.weightKg === 0) {
+          throw new BadRequestException({ code: 'TRANSFER_EMPTY', message: 'PART không còn tồn kho để điều chuyển' });
+        }
         logged = planTransfer(stock, req);
+        // Only the target rack is changed; the source disappears as the saved PART changes location.
         await this.lockRow(em, 'containers', dto.toRackId);
         const rack = await this.ensureSlotAvailable(em, part.id, dto.toRackId, dto.toSlot);
-        await this.checkCapacity(em, rack, part, {
-          weightKg: stock.weightKg,
-          cbm: Number(cbmFor(part, part.cartonCount)),
-          slot: dto.toSlot ?? null,
-        });
+        const occupants = await em.find(Part, { where: { containerId: dto.toRackId } });
+        const occupied = new Set(occupants
+          .filter((p) => p.id !== part.id && p.preferredRackSlot !== null)
+          .map((p) => p.preferredRackSlot));
+        let destinationSlot = dto.toSlot;
+        if (destinationSlot === undefined || destinationSlot === null) {
+          const candidates = Array.from({ length: 20 }, (_, i) => i)
+            .filter((i) => !occupied.has(i) && !(dto.toRackId === fromRackId && i === fromSlot));
+          let lastCapacityError: unknown;
+          for (const candidate of candidates) {
+            try {
+              await this.checkCapacity(em, rack, part, {
+                weightKg: stock.weightKg,
+                cbm: Number(cbmFor(part, part.cartonCount)),
+                slot: candidate,
+              });
+              destinationSlot = candidate;
+              break;
+            } catch (error) {
+              lastCapacityError = error;
+            }
+          }
+          if (destinationSlot === undefined || destinationSlot === null) {
+            if (candidates.length && lastCapacityError) throw lastCapacityError;
+            throw new BadRequestException({ code: 'TRANSFER_NO_SLOT', message: 'Kệ đích không còn ô trống phù hợp' });
+          }
+        } else {
+          if (dto.toRackId === fromRackId && destinationSlot === fromSlot) {
+            throw new BadRequestException({ code: 'TRANSFER_SAME_LOCATION', message: 'Ô đích trùng ô nguồn. Hãy chọn ô khác.' });
+          }
+          await this.checkCapacity(em, rack, part, {
+            weightKg: stock.weightKg,
+            cbm: Number(cbmFor(part, part.cartonCount)),
+            slot: destinationSlot,
+          });
+        }
         part.containerId = dto.toRackId;
-        part.preferredRackSlot = dto.toSlot ?? null;
+        part.preferredRackSlot = destinationSlot;
       }
 
       await em.save(part);
-      return em.save(
+      const transaction = await em.save(
         em.create(InventoryTransaction, {
           type: dto.type,
           partId: part.id,
@@ -247,6 +299,12 @@ export class InventoryService {
           performedByEmail: user?.email || null,
         }),
       );
+      // The authoritative post-commit result drives the frontend scene immediately.
+      return Object.assign(transaction, { partSnapshot: {
+        id: part.id, quantityPcs: part.quantityPcs, cartonCount: part.cartonCount,
+        totalWeightKg: Number(part.totalWeightKg), rackId: part.containerId,
+        preferredRackSlot: part.preferredRackSlot,
+      } });
     });
   }
 

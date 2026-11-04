@@ -153,11 +153,11 @@ export default function ImportDialog({ open, onOpenChange, targetOrderId, target
                 >
                   <FileSpreadsheet className="w-10 h-10 text-slate-300 mx-auto mb-3" />
                   <p className="text-sm font-medium text-slate-600">Kéo thả hoặc click để chọn file</p>
-                  <p className="text-xs text-slate-400 mt-1">Hỗ trợ: Excel (.xlsx)</p>
+                  <p className="text-xs text-slate-400 mt-1">Hỗ trợ: Excel (.xlsx, .csv)</p>
                   <input
                     ref={inputRef}
                     type="file"
-                    accept=".xlsx"
+                    accept=".xlsx,.csv"
                     onChange={handleFile}
                     className="hidden"
                   />
