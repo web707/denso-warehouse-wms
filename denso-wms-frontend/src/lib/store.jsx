@@ -57,15 +57,30 @@ function toRules(rawRules) {
   }));
 }
 
+function getSessionCache(key) {
+  try {
+    const raw = sessionStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function setSessionCache(key, val) {
+  try {
+    sessionStorage.setItem(key, JSON.stringify(val));
+  } catch {}
+}
+
 export function StoreProvider({ children }) {
-  const [orders, setOrders] = useState([]);
-  const [parts, setParts] = useState([]);
-  const [racks, setRacks] = useState([]);
-  const [packingRules, setPackingRules] = useState([]);
-  const [history, setHistory] = useState([]);
-  const [divisions, setDivisions] = useState([]);
-  const [rackTypes, setRackTypes] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [orders, setOrders] = useState(() => getSessionCache('ms_orders') || []);
+  const [parts, setParts] = useState(() => getSessionCache('ms_parts') || []);
+  const [racks, setRacks] = useState(() => getSessionCache('ms_racks') || []);
+  const [packingRules, setPackingRules] = useState(() => getSessionCache('ms_rules') || []);
+  const [history, setHistory] = useState(() => getSessionCache('ms_hist') || []);
+  const [divisions, setDivisions] = useState(() => getSessionCache('ms_divs') || []);
+  const [rackTypes, setRackTypes] = useState(() => getSessionCache('ms_types') || []);
+  const [isLoading, setIsLoading] = useState(() => !getSessionCache('ms_orders'));
   const [currentOrderId, setCurrentOrderIdState] = useState(() => localStorage.getItem('currentOrderId') || null);
 
   const setCurrentOrderId = useCallback((id) => {
@@ -74,22 +89,31 @@ export function StoreProvider({ children }) {
     else localStorage.removeItem('currentOrderId');
   }, []);
 
-  const refetchOrders = useCallback(() => api.orders.list().then(setOrders), []);
-  const refetchParts = useCallback(() => api.parts.list().then((d) => setParts(toParts(d))), []);
-  const refetchRacks = useCallback(() => api.racks.list().then((d) => setRacks(toRacks(d))), []);
-  const refetchRules = useCallback(() => api.packingRules.list().then((d) => setPackingRules(toRules(d))), []);
-  const refetchHistory = useCallback(() => api.history.list({ pageSize: 200 }).then((res) => setHistory(res.items)), []);
+  const refetchOrders = useCallback(() => api.orders.list().then((d) => { setOrders(d); setSessionCache('ms_orders', d); return d; }), []);
+  const refetchParts = useCallback(() => api.parts.list().then((d) => { const p = toParts(d); setParts(p); setSessionCache('ms_parts', p); return p; }), []);
+  const refetchRacks = useCallback(() => api.racks.list().then((d) => { const r = toRacks(d); setRacks(r); setSessionCache('ms_racks', r); return r; }), []);
+  const refetchRules = useCallback(() => api.packingRules.list().then((d) => { const r = toRules(d); setPackingRules(r); setSessionCache('ms_rules', r); return r; }), []);
+  const refetchHistory = useCallback(() => api.history.list({ pageSize: 50 }).then((res) => { const h = res.items || []; setHistory(h); setSessionCache('ms_hist', h); return h; }), []);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      setIsLoading(true);
+      // If we don't have cached data yet, show skeleton loader; if we do, show cache and sync quietly
+      if (!getSessionCache('ms_orders')) {
+        setIsLoading(true);
+      }
       try {
-        const [divs, types] = await Promise.all([api.divisions.list(), api.rackTypes.list()]);
-        if (cancelled) return;
-        setDivisions(divs);
-        setRackTypes(types);
-        await Promise.all([refetchOrders(), refetchParts(), refetchRacks(), refetchRules(), refetchHistory()]);
+        await Promise.all([
+          api.divisions.list().then((d) => { if (!cancelled) { setDivisions(d); setSessionCache('ms_divs', d); } }),
+          api.rackTypes.list().then((t) => { if (!cancelled) { setRackTypes(t); setSessionCache('ms_types', t); } }),
+          refetchOrders(),
+          refetchParts(),
+          refetchRacks(),
+          refetchRules(),
+          refetchHistory(),
+        ]);
+      } catch (err) {
+        console.warn('Initial store sync notice:', err);
       } finally {
         if (!cancelled) setIsLoading(false);
       }
