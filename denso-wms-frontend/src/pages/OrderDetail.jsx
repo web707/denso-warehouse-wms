@@ -1,8 +1,9 @@
-import { useState, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useMemo, useEffect } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '@/lib/store';
 import { calcPartCbm, fmtDec, fmtNum, fmtKg } from '@/lib/calculations';
 import PartDialog from '@/components/PartDialog';
+import { MASAN_REFERENCE_PRODUCTS } from '@/lib/masanCatalog';
 import ImportDialog from '@/components/ImportDialog';
 import RackAllocationWizard from '@/components/RackAllocationWizard';
 import { Button } from '@/components/ui/button';
@@ -24,11 +25,13 @@ import { ArrowLeft, Pencil, Trash2, MoreVertical, PackagePlus, Search, Upload, A
 export default function OrderDetail() {
   const { orderId } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { orders, parts, racks, deletePart, assignPart, deleteOrder } = useStore();
   const { data: lotStatus = [] } = useLotStatus();
   const lotQuality = lotStatusMap(lotStatus);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [suggestedProduct, setSuggestedProduct] = useState('');
   const [importOpen, setImportOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -54,8 +57,21 @@ export default function OrderDetail() {
   const totalWeight = orderParts.reduce((s, p) => s + (p.weight || 0), 0);
   const totalCartons = orderParts.reduce((s, p) => s + (p.cartons || 0), 0);
 
-  const handleEdit = (part) => { setEditing(part); setDialogOpen(true); };
-  const handleAdd = () => { setEditing(null); setDialogOpen(true); };
+  useEffect(() => {
+    const candidate = searchParams.get('catalog');
+    if (!candidate) return;
+    if (MASAN_REFERENCE_PRODUCTS.some((p) => p.name === candidate && p.kind === 'stock')) {
+      setSuggestedProduct(candidate);
+      setEditing(null);
+      setDialogOpen(true);
+    }
+    const updated = new URLSearchParams(searchParams);
+    updated.delete('catalog');
+    setSearchParams(updated, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  const handleEdit = (part) => { setSuggestedProduct(''); setEditing(part); setDialogOpen(true); };
+  const handleAdd = () => { setSuggestedProduct(''); setEditing(null); setDialogOpen(true); };
 
   const handleDeleteOrder = async () => {
     await deleteOrder(orderId);
@@ -223,7 +239,7 @@ export default function OrderDetail() {
         </div>
       </Card>
 
-      <PartDialog open={dialogOpen} onOpenChange={setDialogOpen} part={editing} defaultOrderId={orderId} />
+      <PartDialog open={dialogOpen} onOpenChange={setDialogOpen} part={editing} defaultOrderId={orderId} suggestedProduct={suggestedProduct} />
 
       <ImportDialog
         open={importOpen}

@@ -341,7 +341,7 @@ export default function RackPlan() {
               {searchResults.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {searchResults.map(({ slot, part }) => (
-                    <button key={`${slot.code}-${part.id}`} type="button" onClick={() => setSelectedSlotCode(slot.code)} className="text-xs rounded-full border border-indigo-200 bg-indigo-50 text-indigo-700 px-3 py-1.5 hover:bg-indigo-100">
+                    <button key={`${slot.code}-${part.id}`} type="button" onClick={() => setSelectedSlotCode(slot.code)} className={`text-xs rounded-full border px-3 py-1.5 transition ${selectedSlotCode === slot.code ? 'border-indigo-500 bg-indigo-600 text-white shadow-sm' : 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}`}>
                       {slot.code} · {part.partName}
                     </button>
                   ))}
@@ -354,7 +354,7 @@ export default function RackPlan() {
                 ))}
               </div>
 
-              <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-4">
+              <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-4 items-start">
                 <RackScene3D
                   placements={layout.placements}
                   slots={layout.slots}
@@ -419,7 +419,7 @@ function SlotDetail({ slot, parts, metric, allSlots, moving, onMovePart }) {
   if (!slot) {
     return (
       <Card className="h-full"><CardContent className="h-full min-h-[300px] flex items-center justify-center text-center text-sm text-slate-400 p-8">
-        Click hoặc hover một ô S01–S20 trên mô hình 3D để xem tải trọng và sản phẩm.
+        Click vào một ô S01–S20 để xem tải trọng, sản phẩm và vị trí. Các ô còn lại sẽ mờ đi để dễ quan sát.
       </CardContent></Card>
     );
   }

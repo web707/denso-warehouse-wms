@@ -66,10 +66,8 @@ export default function InventoryOperations() {
   const submit = async (e) => {
     e.preventDefault();
     if (!partId || saving) return;
-    if (type === 'inbound' && !located && !toRackId) {
-      toast({ variant: 'destructive', title: 'Thiếu kệ nhận', description: 'Hãy chọn kệ để nhập hàng và cập nhật mô hình 3D.' });
-      return;
-    }
+    if (selected?.storageClass === 'unknown' && type !== 'outbound') { toast({ variant: 'destructive', title: 'Chưa phân loại bảo quản', description: 'Hãy mở Sản phẩm để chọn nhóm bảo quản trước khi nhập hoặc điều chuyển.' }); return; }
+    // Without a target rack the backend chooses a safe, compatible empty slot.
     const numbers = [qty, cartons, weight].map((v) => Number(v || 0));
     if (type !== 'transfer' && (!numbers.every(Number.isFinite) || numbers.some((n) => n < 0) || !Number.isInteger(numbers[0]) || !Number.isInteger(numbers[1]) || numbers.every((n) => n === 0))) {
       toast({ variant: 'destructive', title: 'Số liệu không hợp lệ', description: 'Nhập số không âm, số cái/thùng là số nguyên và ít nhất một giá trị lớn hơn 0.' });
@@ -145,13 +143,13 @@ export default function InventoryOperations() {
         </p>}
 
         {type === 'inbound' && located && <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-          PART đang ở <b>{where}</b>. Nhập thêm sẽ cộng vào vị trí này. Muốn đổi chỗ, dùng tab Điều chuyển.
+          PART đang ở <b>{where}</b>. Nếu vượt sức chứa, backend sẽ từ chối thay vì cho quá tải; cần tách lô hoặc điều chuyển có kiểm soát.
         </p>}
 
         {canPickTarget && <div className="grid grid-cols-2 gap-2">
           <label className="text-xs">Kệ đích
             <select className="mt-1 w-full h-10 rounded-md border px-2 bg-white" value={toRackId} onChange={(e) => setToRackId(e.target.value)}>
-              <option value="">{type === 'inbound' ? 'Chọn kệ nhận...' : 'Chọn kệ...'}</option>
+              <option value="">{type === 'inbound' ? 'Tự tìm kệ/ô an toàn' : 'Chọn kệ...'}</option>
               {racks.map((r) => <option key={r.id} value={r.id}>{r.zoneCode} · {r.name}</option>)}
             </select>
           </label>

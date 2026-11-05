@@ -121,7 +121,8 @@ export default function Dashboard() {
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Tổng quan kho</h1>
           <p className="text-sm text-slate-500 mt-1">
-            {fmtNum(orders.length)} lô sản phẩm · {zones.length} Zone · {fmtNum(racks.length)} kệ
+            {fmtNum(orders.length)} lô sản phẩm · {zones.length} Zone · {fmtNum(wh.physicalRacks.length)} kệ vật lý
+            {wh.surplusRecordCount > 0 && <span className="ml-2 text-amber-600">· {wh.surplusRecordCount} bản ghi dư/trùng cần đối chiếu</span>}
           </p>
         </div>
         <div className="flex gap-2">
@@ -216,7 +217,7 @@ export default function Dashboard() {
                   </p>
                 </div>
                 <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
-                  {z.racks.map((rs) => (
+                  {z.physicalRacks.map((rs) => (
                     <Link
                       key={rs.rack.id}
                       to={`/racks/${rs.rack.id}/plan`}
@@ -232,6 +233,7 @@ export default function Dashboard() {
                     </Link>
                   ))}
                 </div>
+                {z.surplusRecordCount > 0 && <p className="mt-2 text-xs text-amber-600">Có {z.surplusRecordCount} bản ghi kệ dư/trùng ngoài sơ đồ vật lý; xem Quản lý Zone để đối chiếu hàng.</p>}
               </div>
             ))}
           </div>

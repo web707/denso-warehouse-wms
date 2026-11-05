@@ -26,6 +26,7 @@ import Inspections from '@/pages/Inspections';
 import Shipments from '@/pages/Shipments';
 import Traceability from '@/pages/Traceability';
 import FEFO from '@/pages/FEFO';
+import Catalog from '@/pages/Catalog';
 import UserManagement from '@/pages/UserManagement';
 import Login from '@/pages/Login';
 import { AuthProvider, useAuth } from '@/lib/auth';
@@ -56,6 +57,7 @@ function ProtectedApp() {
       <Route path="/shipments" element={<Shipments />} />
       <Route path="/trace" element={<Traceability />} />
       <Route path="/fefo" element={<FEFO />} />
+      <Route path="/catalog" element={<Catalog />} />
       <Route path="/users" element={<AdminOnly><UserManagement /></AdminOnly>} />
       <Route path="/locations/:rackId/:slotCode" element={<LocationDetail />} />
       <Route path="/zones" element={<Zones />} />

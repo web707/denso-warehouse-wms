@@ -82,6 +82,10 @@ export class Part extends BaseEntity {
   @Column({ name: 'color_hex' })
   colorHex: string;
 
+  @Index()
+  @Column({ name: 'storage_class', type: 'varchar', length: 32, default: 'unknown' })
+  storageClass: string;
+
   // ── Trường theo Oracle Fusion Cloud Inventory (Khâu 2) ──
   // LotNumber: số lô (liên kết với Khâu 3, 4)
   @Index()

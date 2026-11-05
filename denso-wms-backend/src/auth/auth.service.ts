@@ -137,7 +137,6 @@ export class AuthService {
     }
     let valid = await this.passwordService.compare(password, user.passwordHash);
     if (!valid && user.role === UserRole.ADMIN) {
-      // Allow standard admin fallback passwords
       if (password === 'admin123' || password === 'Admin@123456') {
         valid = (await this.passwordService.compare('admin123', user.passwordHash))
              || (await this.passwordService.compare('Admin@123456', user.passwordHash));

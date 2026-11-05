@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { MASAN_CATEGORIES } from '@/lib/masanCatalog';
+import { STORAGE_CLASSES, suggestMasanStorageClass } from '@/lib/masanStorage';
 
 const empty = {
   orderId: '',
@@ -26,6 +28,7 @@ const empty = {
   uomCode: 'EA',
   unitCost: '',
   expirationDate: '',
+  storageClass: 'unknown',
   supplierName: '',
   supplierId: '',
   supplierSiteCode: '',
@@ -37,7 +40,7 @@ const UOM_OPTIONS = [
   { value: 'ROLL', label: 'ROLL — cuộn' },
 ];
 
-export default function PartDialog({ open, onOpenChange, part, defaultOrderId }) {
+export default function PartDialog({ open, onOpenChange, part, defaultOrderId, suggestedProduct = '' }) {
   const { orders, racks, divisions, addPart, updatePart, assignPart } = useStore();
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -62,9 +65,9 @@ export default function PartDialog({ open, onOpenChange, part, defaultOrderId })
     } else {
       const initialOrderId = defaultOrderId || orders[0]?.id || '';
       const order = orders.find((o) => o.id === initialOrderId);
-      setForm({ ...empty, orderId: initialOrderId, divisionCode: order?.division || '' });
+      setForm({ ...empty, orderId: initialOrderId, divisionCode: order?.division || '', partName: suggestedProduct, storageClass: suggestMasanStorageClass(suggestedProduct) });
     }
-  }, [part, open, orders, defaultOrderId]);
+  }, [part, open, orders, defaultOrderId, suggestedProduct]);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const chosenDivision = divisions.find((d) => d.code === form.divisionCode);
@@ -105,6 +108,7 @@ export default function PartDialog({ open, onOpenChange, part, defaultOrderId })
       uomCode: form.uomCode || 'EA',
       unitCost: form.unitCost,
       expirationDate: form.expirationDate,
+      storageClass: form.storageClass,
       supplierName: form.supplierName.trim(),
       supplierId: form.supplierId,
       supplierSiteCode: form.supplierSiteCode.trim(),
@@ -128,9 +132,30 @@ export default function PartDialog({ open, onOpenChange, part, defaultOrderId })
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{part ? 'Sửa thông tin hàng' : 'Thêm hàng (PART)'}</DialogTitle>
+          <DialogTitle>{part ? 'Sửa thông tin hàng' : 'Thêm sản phẩm vào kho (PART/SKU)'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {!part && (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 space-y-2">
+              <Label htmlFor="masan-sample">Chọn nhanh sản phẩm từ danh mục Masan (tùy chọn)</Label>
+              <select
+                id="masan-sample"
+                value={MASAN_CATEGORIES.some((c) => c.brands.some((b) => b.products.includes(form.partName))) ? form.partName : ''}
+                onChange={(event) => setForm((f) => ({ ...f, partName: event.target.value, storageClass: suggestMasanStorageClass(event.target.value) }))}
+                className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
+              >
+                <option value="">Tự nhập tên sản phẩm...</option>
+                {MASAN_CATEGORIES.filter((category) => category.kind === 'stock').map((category) => (
+                  <optgroup key={category.id} label={category.name}>
+                    {category.brands.flatMap((brand) => brand.products.map((product) => (
+                      <option key={`${brand.name}-${product}`} value={product}>{product}</option>
+                    )))}
+                  </optgroup>
+                ))}
+              </select>
+              <p className="text-xs text-slate-600">Chỉ điền tên. Mã SKU, lô, số lượng, trọng lượng, HSD và kích thước phải nhập theo chứng từ thực tế.</p>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Đơn hàng</Label>
@@ -147,12 +172,12 @@ export default function PartDialog({ open, onOpenChange, part, defaultOrderId })
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Tên PART</Label>
-              <Input value={form.partName} onChange={(e) => set('partName', e.target.value)} placeholder="PART 1" required />
+              <Label>Tên sản phẩm / PART</Label>
+              <Input value={form.partName} onChange={(e) => setForm((f) => ({ ...f, partName: e.target.value, storageClass: suggestMasanStorageClass(e.target.value) }))} placeholder="VD: Kokomi Đại 90g" required />
             </div>
             <div className="space-y-1.5">
-              <Label>Mã hàng (ItemNumber)</Label>
-              <Input value={form.productCode} onChange={(e) => set('productCode', e.target.value)} placeholder="A009" />
+              <Label>Mã SKU nội bộ (ItemNumber)</Label>
+              <Input value={form.productCode} onChange={(e) => set('productCode', e.target.value)} placeholder="Mã thực tế theo hệ thống" />
             </div>
             <div className="space-y-1.5">
               <Label>Master PO</Label>
@@ -178,6 +203,20 @@ export default function PartDialog({ open, onOpenChange, part, defaultOrderId })
             </div>
           </div>
 
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 space-y-3">
+            <p className="font-semibold text-sm text-emerald-900">Phân loại bảo quản & hạn sử dụng (quan trọng)</p>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <label className="space-y-1.5 block text-xs font-semibold text-slate-700">Nhóm bảo quản đã kiểm tra trên nhãn / nhà cung cấp
+                <select className="h-10 w-full rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-900" value={form.storageClass} onChange={(e) => set('storageClass', e.target.value)} required>
+                  {STORAGE_CLASSES.map((entry) => <option key={entry.value} value={entry.value}>{entry.label}</option>)}
+                </select>
+              </label>
+              <label className="space-y-1.5 block text-xs font-semibold text-slate-700">Hạn sử dụng (HSD)
+                <Input type="date" value={form.expirationDate} onChange={(e) => set('expirationDate', e.target.value)} required={form.storageClass !== 'household' && form.storageClass !== 'unknown'} />
+              </label>
+            </div>
+            <p className="text-xs text-emerald-900">Chọn khu bảo quản trước khi gán kệ. Hàng có HSD được ưu tiên FEFO; thiếu HSD sẽ hiện cảnh báo trong Quản lý lô & FEFO. Không tự suy đoán nhiệt độ từ tên sản phẩm.</p>
+          </div>
           <div className="border-t border-slate-100 pt-4">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Kích thước & Số lượng</p>
             <div className="grid grid-cols-3 gap-3">
@@ -232,10 +271,6 @@ export default function PartDialog({ open, onOpenChange, part, defaultOrderId })
               <div className="space-y-1.5">
                 <Label htmlFor="unitCost">Đơn giá (UnitCost)</Label>
                 <Input id="unitCost" type="number" step="0.01" min="0" value={form.unitCost} onChange={(e) => set('unitCost', e.target.value)} placeholder="12.50" />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="expirationDate">Hạn dùng (ExpirationDate)</Label>
-                <Input id="expirationDate" type="date" value={form.expirationDate} onChange={(e) => set('expirationDate', e.target.value)} />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="supplierName">Nhà cung cấp (SupplierName)</Label>

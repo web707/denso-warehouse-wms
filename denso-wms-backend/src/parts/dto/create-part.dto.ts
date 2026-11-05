@@ -1,7 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsDateString, IsInt, IsOptional, IsPositive, IsString, IsUUID, Min } from 'class-validator';
+import { IsDateString, IsIn, IsInt, IsOptional, IsPositive, IsString, IsUUID, Min } from 'class-validator';
 
 export class CreatePartDto {
+  @ApiPropertyOptional({ description: 'Nhóm bảo quản đã xác nhận từ nhãn/nhà cung cấp' })
+  @IsOptional()
+  @IsIn(['unknown', 'dry_food', 'condiments', 'beverages', 'chilled_food', 'produce', 'household'])
+  storageClass?: string;
+
   @ApiProperty() @IsUUID() orderId: string;
 
   @ApiProperty({ example: 'PART 1' }) @IsString() partName: string;

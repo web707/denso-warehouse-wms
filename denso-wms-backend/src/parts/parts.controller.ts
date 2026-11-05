@@ -43,6 +43,7 @@ function toWarehousePart(p: Part) {
     preferredRackSlot: p.preferredRackSlot,
     colorHex: p.colorHex,
     lotNumber: p.lotNumber,
+    storageClass: p.storageClass,
     uomCode: p.uomCode,
     unitCost: p.unitCost,
     expirationDate: p.expirationDate,

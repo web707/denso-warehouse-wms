@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useStore } from '@/lib/store';
 import RackAllocationWizard from '@/components/RackAllocationWizard';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
-import { Plus, Package } from 'lucide-react';
+import { Plus, Package, BookOpen } from 'lucide-react';
 
 // Order picker only — each card navigates to its own page (/orders/:id)
 // instead of revealing content on this same page, so there's never any
@@ -36,9 +36,10 @@ export default function Orders() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Lô hàng & Hàng hóa</h1>
-          <p className="text-sm text-slate-500 mt-1">Quản lý lô sản phẩm, PART và vị trí lưu kho</p>
+          <p className="text-sm text-slate-500 mt-1">Quản lý lô sản phẩm, SKU, hạn sử dụng và vị trí lưu kho thực tế</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" asChild><Link to="/catalog"><BookOpen className="w-4 h-4 mr-1.5" /> Danh mục Masan</Link></Button>
           <Button variant="outline" onClick={() => setAddOrderOpen(true)}>
             <Plus className="w-4 h-4 mr-1.5" /> Lô hàng
           </Button>

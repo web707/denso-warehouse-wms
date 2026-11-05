@@ -5,6 +5,8 @@ import { PUBLIC_USER_ID } from '../auth/guards/jwt-auth.guard';
 import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { Container } from '../containers/entities/container.entity';
 import { Part } from '../parts/entities/part.entity';
+import { WarehouseZone } from '../warehouse-zones/entities/warehouse-zone.entity';
+import { assertExpiryDeclared, assertStoragePlacement, preferredSlotsByExpiry } from './storage-placement.rules';
 import { CreateInventoryTransactionDto } from './dto/create-inventory-transaction.dto';
 import { QueryHeatmapDto } from './dto/query-heatmap.dto';
 import { InventoryTransaction, InventoryTransactionType } from './entities/inventory-transaction.entity';
@@ -136,7 +138,16 @@ export class InventoryService {
   }
 
   private async checkCapacity(em: EntityManager, rack: Container, part: Part, after: LoadItem): Promise<void> {
+    // Không khóa kệ theo đơn hàng tạo ra nó: Zone có 20 kệ vật lý dùng chung.
+    // Các kiểm tra bảo quản, sức chứa và ô chứa vẫn áp dụng cho toàn bộ PART.
     const inRack = await em.find(Part, { where: { containerId: rack.id } });
+    const zone = await em.findOne(WarehouseZone, { where: { warehouseCode: rack.warehouseCode, code: rack.zoneCode } });
+    assertExpiryDeclared(part.storageClass, part.expirationDate);
+    assertStoragePlacement({
+      productClass: part.storageClass, zoneMode: zone?.storageMode,
+      rackClasses: inRack.filter((p) => p.id !== part.id).map((p) => p.storageClass),
+      productName: part.partName, rackName: `${rack.zoneCode}/${rack.name}`,
+    });
     const toLoad = (p: Part): LoadItem => ({ weightKg: Number(p.totalWeightKg), cbm: Number(p.cbm), slot: p.preferredRackSlot });
     const mine = inRack.find((p) => p.id === part.id);
     assertCapacity({
@@ -175,35 +186,47 @@ export class InventoryService {
         }
         assertInboundLocation({ rackId: fromRackId, slot: fromSlot }, { toRackId: dto.toRackId, toSlot: dto.toSlot }, part.partName);
 
-        let rackId = fromRackId;
-        let slot = fromSlot;
-        if (!rackId && dto.toRackId) {
-          rackId = dto.toRackId;
-          slot = dto.toSlot ?? null;
-        } else if (rackId && slot === null && dto.toSlot !== undefined && dto.toSlot !== null) {
-          slot = dto.toSlot;
-        }
-
-        if (!rackId) {
-          throw new BadRequestException({ code: 'INBOUND_RACK_REQUIRED', message: 'Vui lòng chọn kệ nhận hàng để cập nhật mô hình kho 3D' });
-        }
+        // When no rack was explicitly selected, try the present position first, then
+        // available racks in the same warehouse. A PART is atomic: do not split one
+        // stock record between two racks. Never save an over-capacity placement.
         const newCartons = part.cartonCount + req.cartons;
-        if (rackId) {
-          await this.lockRow(em, 'containers', rackId);
-          if (slot === null || slot === undefined) {
-            const occupants = await em.find(Part, { where: { containerId: rackId } });
-            const busy = new Set(occupants.filter((p) => p.id !== part.id && p.preferredRackSlot !== null)
-              .map((p) => p.preferredRackSlot));
-            const free = Array.from({ length: 20 }, (_, i) => i).find((i) => !busy.has(i));
-            if (free === undefined) throw new BadRequestException({ code: 'RACK_FULL', message: 'Kệ không còn ô trống (S01–S20)' });
-            slot = free;
+        const allRacks = (await em.find(Container, { where: { warehouseCode: 'DENSO-WH' }, order: { zoneCode: 'ASC', name: 'ASC' } }))
+          .filter((r) => !r.orderId || r.orderId === part.orderId);
+        const candidateIds = dto.toRackId
+          ? [dto.toRackId]
+          : (fromRackId ? [fromRackId] : allRacks.map((rack) => rack.id));
+        let rackId: string | null = null;
+        let slot: number | null = null;
+        let lastFailure: unknown;
+        for (const candidateId of [...new Set(candidateIds)]) {
+          await this.lockRow(em, 'containers', candidateId);
+          const rack = await em.findOne(Container, { where: { id: candidateId } });
+          if (!rack) { lastFailure = new NotFoundException('Không tìm thấy kệ nhận'); continue; }
+          const occupants = await em.find(Part, { where: { containerId: candidateId } });
+          const busy = new Set(occupants.filter((p) => p.id !== part.id && p.preferredRackSlot !== null).map((p) => p.preferredRackSlot));
+          const manualSlot = dto.toSlot;
+          const slots = manualSlot !== undefined && manualSlot !== null
+            ? [manualSlot]
+            : [candidateId === fromRackId ? fromSlot : null, ...preferredSlotsByExpiry(part.expirationDate)]
+                .filter((v): v is number => v !== null && v !== undefined);
+          for (const chosenSlot of [...new Set(slots)]) {
+            if (busy.has(chosenSlot)) continue;
+            try {
+              await this.checkCapacity(em, rack, part, {
+                weightKg: stock.weightKg + req.weight,
+                cbm: Number(cbmFor(part, newCartons)), slot: chosenSlot,
+              });
+              rackId = candidateId;
+              slot = chosenSlot;
+              break;
+            } catch (error) { lastFailure = error; }
           }
-          const rack = await this.ensureSlotAvailable(em, part.id, rackId, slot);
-          await this.checkCapacity(em, rack, part, {
-            weightKg: stock.weightKg + req.weight,
-            cbm: Number(cbmFor(part, newCartons)),
-            slot,
-          });
+          if (rackId) break;
+          if (dto.toRackId) break; // Never silently override a user's explicit rack.
+        }
+        if (!rackId || slot === null) {
+          if (dto.toRackId && lastFailure) throw lastFailure;
+          throw new BadRequestException({ code: 'NO_SAFE_STORAGE_LOCATION', message: 'Không còn vị trí đạt điều kiện bảo quản và tải trọng. Hãy tạo kệ/Zone phù hợp hoặc tách lô trước khi nhập.' });
         }
         part.containerId = rackId;
         part.preferredRackSlot = slot;
@@ -245,7 +268,7 @@ export class InventoryService {
           .map((p) => p.preferredRackSlot));
         let destinationSlot = dto.toSlot;
         if (destinationSlot === undefined || destinationSlot === null) {
-          const candidates = Array.from({ length: 20 }, (_, i) => i)
+          const candidates = preferredSlotsByExpiry(part.expirationDate)
             .filter((i) => !occupied.has(i) && !(dto.toRackId === fromRackId && i === fromSlot));
           let lastCapacityError: unknown;
           for (const candidate of candidates) {

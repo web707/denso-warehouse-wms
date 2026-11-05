@@ -7,6 +7,9 @@ import { HistoryEventType } from '../history/entities/history-event.entity';
 import { HistoryService } from '../history/history.service';
 import { Order, OrderStatus } from '../orders/entities/order.entity';
 import { Part } from '../parts/entities/part.entity';
+import { WarehouseZone } from '../warehouse-zones/entities/warehouse-zone.entity';
+import { assertExpiryDeclared, assertStoragePlacement, preferredSlotsByExpiry } from '../inventory/storage-placement.rules';
+import { assertCapacity, rackLimits } from '../inventory/inventory.rules';
 import { CartonPlacement } from './entities/carton-placement.entity';
 import { LoadPlan } from './entities/load-plan.entity';
 import { ContainerDims, ContainerRecommendation, SolverPart, Violation } from './domain/types';
@@ -179,7 +182,33 @@ export class LoadingService {
     });
 
     const accepted: Part[] = [];
+    const chosenSlots = new Map<string, number>();
+    const zone = await this.dataSource.getRepository(WarehouseZone).findOne({ where: { warehouseCode: container.warehouseCode, code: container.zoneCode } });
+    const used = new Set(alreadyAssigned.map((part) => part.preferredRackSlot).filter((slot): slot is number => slot !== null));
+    // Legacy unplaced stock occupies a real physical location but has no slot ID;
+    // do not double-book that space silently.
+    const legacyWithoutSlot = alreadyAssigned.filter((part) => part.preferredRackSlot === null).length;
+    for (let i = 0; i < legacyWithoutSlot; i++) {
+      const free = Array.from({ length: 20 }, (_, j) => j).find((j) => !used.has(j));
+      if (free === undefined) break;
+      used.add(free);
+    }
     for (const p of candidates) {
+      try {
+        assertExpiryDeclared(p.storageClass, p.expirationDate);
+        assertStoragePlacement({ productClass: p.storageClass, zoneMode: zone?.storageMode, rackClasses: [...alreadyAssigned, ...accepted].map((part) => part.storageClass), productName: p.partName, rackName: container.name });
+      } catch { break; }
+      const availableSlots = preferredSlotsByExpiry(p.expirationDate).filter((i) => !used.has(i));
+      const destinationSlot = availableSlots.find((i) => {
+        try {
+          assertCapacity({ rackName: container.name, partName: p.partName, limits: rackLimits(container),
+            others: [...alreadyAssigned, ...accepted].map((part) => ({ weightKg: Number(part.totalWeightKg), cbm: Number(part.cbm), slot: chosenSlots.get(part.id) ?? part.preferredRackSlot })),
+            before: null, after: { weightKg: Number(p.totalWeightKg), cbm: Number(p.cbm), slot: i } });
+          return true;
+        } catch { return false; }
+      });
+      if (destinationSlot === undefined) break;
+
       const trialParts = [...alreadyAssigned, ...accepted, p].map((part) => ({
         id: part.id,
         partName: part.partName,
@@ -205,10 +234,15 @@ export class LoadingService {
       const hasError = result.violations.some((violation) => violation.severity === 'error');
       if (placedCartonCount !== expectedCartonCount || hasError) break;
       accepted.push(p);
+      chosenSlots.set(p.id, destinationSlot);
+      used.add(destinationSlot);
     }
 
     if (accepted.length > 0) {
-      await this.parts.update({ id: In(accepted.map((p) => p.id)) }, { containerId });
+      // Use one concrete slot per PART; updating just containerId would allow overlap.
+      for (const part of accepted) {
+        await this.parts.update({ id: part.id }, { containerId, preferredRackSlot: chosenSlots.get(part.id) ?? null });
+      }
       await this.history.log(
         HistoryEventType.PART_ASSIGNED,
         `Tự động phân bổ ${accepted.length} PART vào kệ ${container.name}`,

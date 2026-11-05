@@ -10,6 +10,9 @@ import { HistoryService } from '../history/history.service';
 import { Order } from '../orders/entities/order.entity';
 import { nextPartColor } from '../parts/constants/part-colors';
 import { Part } from '../parts/entities/part.entity';
+import { WarehouseZone } from '../warehouse-zones/entities/warehouse-zone.entity';
+import { assertCapacity, rackLimits } from '../inventory/inventory.rules';
+import { assertExpiryDeclared, assertStoragePlacement, preferredSlotsByExpiry, STORAGE_CLASSES, suggestStorageClass } from '../inventory/storage-placement.rules';
 import { ImportPreviewOrder, ImportResult, ImportRowError } from './dto/import-preview.dto';
 
 const TEMPLATE_HEADERS = [
@@ -29,6 +32,7 @@ const TEMPLATE_HEADERS = [
 
 // Cột tùy chọn theo Oracle Fusion Cloud Inventory. Không bắt buộc: file cũ không có các cột này vẫn nhập bình thường.
 const OPTIONAL_FIELDS = [
+  { field: 'storageClass', aliases: ['STORAGECLASS', 'STORAGECATEGORY'] },
   { field: 'lotNumber', aliases: ['LOTNUMBER', 'LOT', 'LOTNO'] },
   { field: 'uomCode', aliases: ['UOMCODE', 'UOM'] },
   { field: 'unitCost', aliases: ['UNITCOST', 'COST'] },
@@ -118,6 +122,7 @@ export class ImportsService {
       115.5,
       21,
       '45 x 38 x 16',
+      'dry_food',
       'LOT-2026-001',
       'EA',
       12.5,
@@ -143,13 +148,9 @@ export class ImportsService {
       if (!rack) {
         throw new NotFoundException({ code: 'RACK_NOT_FOUND', message: 'Không tìm thấy kệ đích' });
       }
-      if (!rack.orderId) {
-        throw new BadRequestException({ code: 'RACK_WITHOUT_ORDER', message: 'Kệ đích chưa thuộc lô linh kiện nào' });
-      }
-      if (targetOrderId && targetOrderId !== rack.orderId) {
-        throw new BadRequestException({ code: 'RACK_ORDER_MISMATCH', message: 'Kệ đích không thuộc lô linh kiện đã chọn' });
-      }
-      effectiveTargetOrderId = rack.orderId;
+      // Khi chọn lô cụ thể, giữ đúng lô đó; không ép theo lô tạo kệ từ trước.
+      // Nếu không chỉ định, dùng lô gốc của kệ làm mặc định tương thích cũ.
+      effectiveTargetOrderId = targetOrderId || rack.orderId || undefined;
     }
 
     const { rows, containerHint } = await this.readRows(fileBuffer);
@@ -235,6 +236,8 @@ export class ImportsService {
     cartonLengthMm: number;
     cartonWidthMm: number;
     cartonHeightMm: number;
+    lotNumber?: string | null;
+    expirationDate?: string | null;
   }): string {
     return [
       p.divisionId,
@@ -246,6 +249,8 @@ export class ImportsService {
       p.cartonLengthMm,
       p.cartonWidthMm,
       p.cartonHeightMm,
+      p.lotNumber ?? '',
+      p.expirationDate ?? '',
     ].join('|');
   }
 
@@ -280,6 +285,7 @@ export class ImportsService {
         if (!forcedRack) {
           throw new NotFoundException({ code: 'RACK_NOT_FOUND', message: 'Không tìm thấy kệ đích' });
         }
+        await manager.query('SELECT id FROM containers WHERE id = $1 FOR UPDATE', [forcedRack.id]);
       }
 
       let forcedOrder: Order | null = null;
@@ -308,6 +314,8 @@ export class ImportsService {
             );
           }
         }
+        // Kệ vật lý có thể chứa nhiều lô: không ép order.id trùng orderId gốc của kệ.
+        // Vẫn áp dụng giới hạn 20 ô, tải trọng và cách ly bảo quản khi import.
         createdOrderIds.push(order.id);
 
         const existingParts = await partRepo.find({ where: { orderId: order.id } });
@@ -331,6 +339,8 @@ export class ImportsService {
             cartonLengthMm: p.cartonLengthMm,
             cartonWidthMm: p.cartonWidthMm,
             cartonHeightMm: p.cartonHeightMm,
+            lotNumber: p.lotNumber,
+            expirationDate: p.expirationDate,
           });
           if (seenSignatures.has(signature)) {
             duplicatePartsSkipped++;
@@ -341,6 +351,33 @@ export class ImportsService {
           const cbm =
             (p.cartonLengthMm * p.cartonWidthMm * p.cartonHeightMm * p.cartonCount) / 1_000_000_000;
 
+          // Direct-to-rack import must obey the SAME 20-slot, load and hygiene
+          // rules as manual inbound. Otherwise one spreadsheet can overfill a rack.
+          let importSlot: number | null = null;
+          if (forcedRack) {
+            const peers = await partRepo.find({ where: { containerId: forcedRack.id } });
+            const zone = await manager.getRepository(WarehouseZone).findOne({ where: { warehouseCode: forcedRack.warehouseCode, code: forcedRack.zoneCode } });
+            assertExpiryDeclared(p.storageClass, p.expirationDate);
+            assertStoragePlacement({ productClass: p.storageClass, zoneMode: zone?.storageMode, rackClasses: peers.map((v) => v.storageClass), productName: p.partName, rackName: `${forcedRack.zoneCode}/${forcedRack.name}` });
+            const busy = new Set(peers.filter((v) => v.preferredRackSlot !== null).map((v) => v.preferredRackSlot));
+            let lastError: unknown;
+            for (const i of preferredSlotsByExpiry(p.expirationDate)) {
+              if (busy.has(i)) continue;
+              try {
+                assertCapacity({
+                  rackName: forcedRack.name, partName: p.partName, limits: rackLimits(forcedRack),
+                  others: peers.map((v) => ({ weightKg: Number(v.totalWeightKg), cbm: Number(v.cbm), slot: v.preferredRackSlot })),
+                  before: null, after: { weightKg: p.totalWeightKg, cbm, slot: i },
+                });
+                importSlot = i;
+                break;
+              } catch (err) { lastError = err; }
+            }
+            if (importSlot === null) {
+              if (lastError) throw lastError;
+              throw new BadRequestException({ code: 'RACK_FULL', message: `Kệ ${forcedRack.name} không còn ô phù hợp. Hãy tách file theo nhóm hàng hoặc nhập vào lô trước.` });
+            }
+          }
           await partRepo.save(
             partRepo.create({
               orderId: order.id,
@@ -357,7 +394,8 @@ export class ImportsService {
               cartonHeightMm: p.cartonHeightMm,
               cbm: cbm.toFixed(6),
               containerId: forcedRack?.id ?? null,
-              preferredRackSlot: null,
+              preferredRackSlot: importSlot,
+              storageClass: p.storageClass || suggestStorageClass(p.partName),
               colorHex: nextPartColor(colorCursor++),
               lotNumber: p.lotNumber ?? null,
               uomCode: p.uomCode || 'EA',
@@ -599,6 +637,9 @@ export class ImportsService {
       dcPrefixCache.set(dcKey, dcPrefix);
     }
 
+    const storageClass = (v.storageClass || suggestStorageClass(v.partName)).toLowerCase();
+    if (!(STORAGE_CLASSES as readonly string[]).includes(storageClass)) throw new Error(`storageClass không hợp lệ: ${storageClass}`);
+
     const sizeMatch =
       /^\s*(\d+(?:[.,]\d+)?)\s*[x×]\s*(\d+(?:[.,]\d+)?)\s*[x×]\s*(\d+(?:[.,]\d+)?)\s*$/i.exec(
         v.cartonSizeCm,
@@ -631,6 +672,7 @@ export class ImportsService {
       destination: v.destination || 'USA',
       part: {
         partName: v.partName,
+        storageClass,
         productCode: v.productCode || null,
         divisionCode: division.code,
         dcPrefix: dcPrefix.code,

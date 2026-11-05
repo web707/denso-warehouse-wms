@@ -16,6 +16,9 @@ export class WarehouseZone extends BaseEntity {
   @Column({ type: 'varchar', nullable: true })
   description: string | null;
 
+  @Column({ name: 'storage_mode', type: 'varchar', length: 32, default: 'ambient' })
+  storageMode: string;
+
   @Column({ default: true })
   active: boolean;
 }

@@ -9,6 +9,7 @@ export interface ImportPreviewOrder {
   destination: string;
   parts: {
     partName: string;
+    storageClass: string;
     productCode: string | null;
     divisionCode: string;
     dcPrefix: string;

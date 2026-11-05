@@ -3,7 +3,7 @@ import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Package, Warehouse, ClipboardList, RotateCcw, History as HistoryIcon,
   ArrowRightLeft, QrCode, MapPinned, BarChart3, Factory, ShieldCheck, Truck, GitBranch, Menu, PanelLeftClose, PanelLeftOpen,
-  Sun, Moon, Monitor, LogOut, CalendarClock, UsersRound, Eye,
+  Sun, Moon, Monitor, LogOut, CalendarClock, UsersRound, Eye, BookOpen,
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { useAuth } from '@/lib/auth';
@@ -24,6 +24,7 @@ const navGroups = [
       { to: '/', label: 'Tổng quan', icon: LayoutDashboard, end: true },
       { to: '/inventory', label: 'Nhập · Xuất · Điều chuyển', short: 'Nhập · Xuất', icon: ArrowRightLeft },
       { to: '/orders', label: 'Lô hàng · SKU', icon: Package },
+      { to: '/catalog', label: 'Danh mục sản phẩm Masan', short: 'Danh mục Masan', icon: BookOpen },
       { to: '/fefo', label: 'Hàng cũ · mới (FEFO)', short: 'FEFO', icon: CalendarClock },
       { to: '/qr-labels', label: 'QR & Barcode kho', short: 'QR', icon: QrCode },
     ],

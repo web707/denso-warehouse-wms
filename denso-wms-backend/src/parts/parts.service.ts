@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FindOptionsWhere, Not, Repository } from 'typeorm';
 import { HistoryEventType } from '../history/entities/history-event.entity';
@@ -11,6 +11,10 @@ import { CreatePartDto } from './dto/create-part.dto';
 import { UpdatePartDto } from './dto/update-part.dto';
 import { QueryPartsDto } from './dto/query-parts.dto';
 import { Part } from './entities/part.entity';
+import { DataSource } from 'typeorm';
+import { WarehouseZone } from '../warehouse-zones/entities/warehouse-zone.entity';
+import { assertExpiryDeclared, assertStoragePlacement, preferredSlotsByExpiry, suggestStorageClass } from '../inventory/storage-placement.rules';
+import { assertCapacity, rackLimits } from '../inventory/inventory.rules';
 
 function computeCbm(lengthMm: number, widthMm: number, heightMm: number, cartons: number): string {
   const cbm = (lengthMm * widthMm * heightMm * cartons) / 1_000_000_000;
@@ -23,6 +27,7 @@ export class PartsService {
     @InjectRepository(Part) private readonly parts: Repository<Part>,
     @InjectRepository(Container) private readonly racks: Repository<Container>,
     private readonly history: HistoryService,
+    private readonly dataSource: DataSource,
   ) {}
 
   findAll(query: QueryPartsDto): Promise<Part[]> {
@@ -66,6 +71,7 @@ export class PartsService {
         preferredRackSlot: null,
         colorHex: dto.colorHex ?? nextPartColor(existingCount),
         lotNumber: dto.lotNumber || null,
+        storageClass: dto.storageClass || suggestStorageClass(dto.partName),
         uomCode: dto.uomCode || 'EA',
         unitCost: dto.unitCost !== undefined && dto.unitCost !== null ? dto.unitCost.toString() : null,
         expirationDate: dto.expirationDate || null,
@@ -82,8 +88,12 @@ export class PartsService {
 
   async update(id: string, dto: UpdatePartDto): Promise<Part> {
     const part = await this.findOne(id);
+    const previousLoad = { weightKg: Number(part.totalWeightKg), cbm: Number(part.cbm), slot: part.preferredRackSlot };
+    const previousStorageClass = part.storageClass;
+    const previousName = part.partName;
     Object.assign(part, {
       ...dto,
+      storageClass: dto.storageClass || part.storageClass,
       totalWeightKg:
         dto.totalWeightKg !== undefined ? dto.totalWeightKg.toString() : part.totalWeightKg,
       unitCost:
@@ -94,6 +104,19 @@ export class PartsService {
     const heightMm = dto.cartonHeightMm ?? part.cartonHeightMm;
     const cartonCount = dto.cartonCount ?? part.cartonCount;
     part.cbm = computeCbm(lengthMm, widthMm, heightMm, cartonCount);
+    const placementAffecting = part.storageClass !== previousStorageClass || part.partName !== previousName
+      || Math.abs(Number(part.totalWeightKg) - previousLoad.weightKg) > 0.001
+      || Math.abs(Number(part.cbm) - previousLoad.cbm) > 0.000001;
+    if (part.containerId && placementAffecting) {
+      const rack = await this.racks.findOne({ where: { id: part.containerId } });
+      if (rack) {
+        const zone = await this.dataSource.getRepository(WarehouseZone).findOne({ where: { warehouseCode: rack.warehouseCode, code: rack.zoneCode } });
+        const peers = await this.parts.find({ where: { containerId: rack.id, id: Not(part.id) } });
+        assertExpiryDeclared(part.storageClass, part.expirationDate);
+        assertStoragePlacement({ productClass: part.storageClass, zoneMode: zone?.storageMode, rackClasses: peers.map((p) => p.storageClass), productName: part.partName, rackName: rack.name });
+        assertCapacity({ rackName: rack.name, partName: part.partName, limits: rackLimits(rack), others: peers.map((p) => ({ weightKg: Number(p.totalWeightKg), cbm: Number(p.cbm), slot: p.preferredRackSlot })), before: previousLoad, after: { weightKg: Number(part.totalWeightKg), cbm: Number(part.cbm), slot: part.preferredRackSlot } });
+      }
+    }
     await this.parts.save(part);
     await this.history.log(HistoryEventType.PART_UPDATED, `Cập nhật PART ${part.partName}`, {
       partId: part.id,
@@ -102,88 +125,60 @@ export class PartsService {
   }
 
   async assign(id: string, dto: AssignPartDto): Promise<Part> {
-    const part = await this.findOne(id);
-    part.containerId = dto.containerId ?? null;
-    await this.parts.save(part);
-    await this.history.log(
-      HistoryEventType.PART_ASSIGNED,
-      dto.containerId
-        ? `Gán PART ${part.partName} vào kệ`
-        : `Bỏ gán PART ${part.partName} khỏi kệ`,
-      { partId: part.id, containerId: dto.containerId ?? null },
-    );
-    return this.findOne(id);
+    // Legacy entry point must not bypass placement, segregation or capacity rules.
+    return this.assignRack(id, { rackId: dto.containerId ?? null, slotIndex: null });
   }
 
-
   async assignRack(id: string, dto: AssignRackDto): Promise<Part> {
-    const part = await this.findOne(id);
-    const previousRackId = part.containerId;
-    const previousSlotIndex = part.preferredRackSlot;
-
-    if (dto.rackId && dto.slotIndex !== undefined && dto.slotIndex !== null) {
-      const conflict = await this.parts.findOne({
-        where: {
-          containerId: dto.rackId,
-          preferredRackSlot: dto.slotIndex,
-          id: Not(id),
-        },
-      });
-      if (conflict) {
-        throw new NotFoundException({
-          code: 'RACK_SLOT_OCCUPIED',
-          message: `Ô S${String(dto.slotIndex + 1).padStart(2, '0')} đã được ưu tiên cho PART ${conflict.partName}`,
+    const result = await this.dataSource.transaction(async (em) => {
+      // Lock first PART, then destination rack. InventoryService uses the same ordering.
+      await em.query('SELECT id FROM parts WHERE id = $1 FOR UPDATE', [id]);
+      const part = await em.findOne(Part, { where: { id } });
+      if (!part) throw new NotFoundException({ code: 'PART_NOT_FOUND', message: 'Không tìm thấy PART' });
+      const previousRackId = part.containerId;
+      const previousSlotIndex = part.preferredRackSlot;
+      let destinationSlot: number | null = null;
+      let toRack: Container | null = null;
+      if (dto.rackId) {
+        await em.query('SELECT id FROM containers WHERE id = $1 FOR UPDATE', [dto.rackId]);
+        toRack = await em.findOne(Container, { where: { id: dto.rackId } });
+        if (!toRack) throw new NotFoundException({ code: 'RACK_NOT_FOUND', message: 'Không tìm thấy kệ nhận hàng' });
+        // Kệ là vị trí vật lý của Zone, có thể lưu các lô/đơn khác nhau.
+        // Vẫn kiểm tra nhóm bảo quản, ô trống và sức chứa bên dưới.
+        const peers = await em.find(Part, { where: { containerId: toRack.id, id: Not(id) } });
+        const zone = await em.findOne(WarehouseZone, { where: { warehouseCode: toRack.warehouseCode, code: toRack.zoneCode } });
+        assertExpiryDeclared(part.storageClass, part.expirationDate);
+        assertStoragePlacement({ productClass: part.storageClass, zoneMode: zone?.storageMode, rackClasses: peers.map((p) => p.storageClass), productName: part.partName, rackName: toRack.name });
+        const occupied = new Set(peers.filter((p) => p.preferredRackSlot !== null).map((p) => p.preferredRackSlot));
+        if (dto.slotIndex !== null && dto.slotIndex !== undefined) {
+          if (occupied.has(dto.slotIndex)) throw new BadRequestException({ code: 'RACK_SLOT_OCCUPIED', message: 'Ô kệ này đang có PART khác' });
+          destinationSlot = dto.slotIndex;
+        } else if (dto.rackId === previousRackId && previousSlotIndex !== null && !occupied.has(previousSlotIndex)) {
+          destinationSlot = previousSlotIndex;
+        } else {
+          destinationSlot = preferredSlotsByExpiry(part.expirationDate).find((i) => !occupied.has(i)) ?? null;
+        }
+        if (destinationSlot === null) throw new BadRequestException({ code: 'RACK_FULL', message: `Kệ ${toRack.name} không còn ô trống. Hãy chọn kệ khác.` });
+        assertCapacity({
+          rackName: toRack.name, partName: part.partName, limits: rackLimits(toRack),
+          others: peers.map((p) => ({ weightKg: Number(p.totalWeightKg), cbm: Number(p.cbm), slot: p.preferredRackSlot })),
+          before: previousRackId === dto.rackId ? { weightKg: Number(part.totalWeightKg), cbm: Number(part.cbm), slot: previousSlotIndex } : null,
+          after: { weightKg: Number(part.totalWeightKg), cbm: Number(part.cbm), slot: destinationSlot },
         });
       }
-    }
-
-    const [fromRack, toRack] = await Promise.all([
-      previousRackId ? this.racks.findOne({ where: { id: previousRackId } }) : Promise.resolve(null),
-      dto.rackId ? this.racks.findOne({ where: { id: dto.rackId } }) : Promise.resolve(null),
-    ]);
-
-    part.containerId = dto.rackId ?? null;
-    part.preferredRackSlot = dto.rackId ? (dto.slotIndex ?? null) : null;
-    await this.parts.save(part);
-
-    const fromSlot = previousSlotIndex === null || previousSlotIndex === undefined
-      ? null
-      : `S${String(previousSlotIndex + 1).padStart(2, '0')}`;
-    const toSlot = part.preferredRackSlot === null
-      ? null
-      : `S${String(part.preferredRackSlot + 1).padStart(2, '0')}`;
-
-    const moved = Boolean(previousRackId && dto.rackId) &&
-      (previousRackId !== dto.rackId || previousSlotIndex !== part.preferredRackSlot);
-
-    const description = dto.rackId
-      ? moved
-        ? `Điều chuyển PART ${part.partName}: ${fromRack?.name || 'Kệ'}${fromSlot ? `-${fromSlot}` : ''} → ${toRack?.name || 'Kệ'}${toSlot ? `-${toSlot}` : ''}`
-        : `Gán PART ${part.partName} vào ${toRack?.name || 'kệ'}${toSlot ? ` · ô ${toSlot}` : ''}`
-      : `Bỏ gán PART ${part.partName} khỏi kệ`;
-
-    await this.history.log(
-      HistoryEventType.PART_ASSIGNED,
-      description,
-      {
-        action: moved ? 'rack_move' : dto.rackId ? 'rack_assign' : 'rack_unassign',
-        partId: part.id,
-        partName: part.partName,
-        productCode: part.productCode,
-        orderId: part.orderId,
-        fromRackId: previousRackId,
-        fromRackName: fromRack?.name ?? null,
-        fromSlotIndex: previousSlotIndex,
-        fromSlot,
-        toRackId: dto.rackId ?? null,
-        toRackName: toRack?.name ?? null,
-        toSlotIndex: part.preferredRackSlot,
-        toSlot,
-        totalWeightKg: Number(part.totalWeightKg),
-        cartonCount: part.cartonCount,
-      },
-      part.orderId,
-    );
+      part.containerId = dto.rackId || null;
+      part.preferredRackSlot = dto.rackId ? destinationSlot : null;
+      await em.save(part);
+      return { part, previousRackId, previousSlotIndex, toRack };
+    });
+    const { part, previousRackId, previousSlotIndex, toRack } = result;
+    const fromSlot = previousSlotIndex === null ? null : `S${String(previousSlotIndex + 1).padStart(2, '0')}`;
+    const toSlot = part.preferredRackSlot === null ? null : `S${String(part.preferredRackSlot + 1).padStart(2, '0')}`;
+    const fromRack = previousRackId ? await this.racks.findOne({ where: { id: previousRackId } }) : null;
+    await this.history.log(HistoryEventType.PART_ASSIGNED,
+      `PART ${part.partName}: ${fromRack?.name || 'Chưa xếp'}${fromSlot || ''} → ${toRack?.name || 'Chưa xếp'}${toSlot || ''}`,
+      { action: 'rack_move', partId: part.id, partName: part.partName, fromRackId: previousRackId,
+        fromSlotIndex: previousSlotIndex, toRackId: part.containerId, toSlotIndex: part.preferredRackSlot }, part.orderId);
     return this.findOne(id);
   }
 

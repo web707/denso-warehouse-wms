@@ -27,6 +27,9 @@ import {
   ArrowRightLeft,
 } from 'lucide-react';
 import WarehouseScene3D from '@/components/viz/WarehouseScene3D';
+import { inspectZoneRacks } from '@/lib/zoneRackInventory';
+import InboundJourney3D from '@/components/viz/InboundJourney3D';
+import { modeLabel } from '@/lib/masanStorage';
 import { RACKS_PER_ZONE, RACK_STATUS_META, SLOTS_PER_RACK, WAREHOUSE_CODE, compareRacks, slotCode, summarizeRack, zoneOf } from '@/lib/warehouse';
 
 const TARGET_RACKS = RACKS_PER_ZONE;
@@ -64,10 +67,11 @@ export default function Racks() {
 
   const zoneMeta = useMemo(() => zones.find((z) => z.code === selectedZone), [zones, selectedZone]);
 
-  const warehouseRacks = useMemo(() => [...racks]
-    .filter((r) => (r.warehouseCode || WAREHOUSE_CODE) === WAREHOUSE_CODE && zoneOf(r) === selectedZone)
-    .sort(compareRacks)
-    .slice(0, TARGET_RACKS), [racks, selectedZone]);
+  const zoneInspection = useMemo(() => inspectZoneRacks(
+    racks.filter((r) => (r.warehouseCode || WAREHOUSE_CODE) === WAREHOUSE_CODE && zoneOf(r) === selectedZone),
+    parts,
+  ), [racks, parts, selectedZone]);
+  const warehouseRacks = useMemo(() => [...zoneInspection.physicalRacks].sort(compareRacks), [zoneInspection]);
 
   const rackSummaries = useMemo(() => warehouseRacks.map((rack) => {
     const sum = summarizeRack(rack, parts);
@@ -114,9 +118,11 @@ export default function Racks() {
       });
       toast({
         title: `Đã khởi tạo ${selectedZone}`,
-        description: result.createdCount > 0
-          ? `Đã tạo thêm ${result.createdCount} kệ. ${selectedZone} hiện có R01–R20 riêng.`
-          : `${selectedZone} đã đủ R01–R20.`,
+        description: result.extraCount > 0
+          ? `Có ${result.extraCount} bản ghi kệ dư/trùng cần xử lý an toàn.`
+          : result.createdCount > 0
+            ? `Đã tạo thêm ${result.createdCount} kệ.`
+            : `${selectedZone} đã đủ R01–R20.`,
       });
     } catch (err) {
       toast({ variant: 'destructive', title: `Không thể khởi tạo ${selectedZone}`, description: err.message });
@@ -196,7 +202,7 @@ export default function Racks() {
         <div className="flex items-center gap-2 flex-wrap">
           <h1 className="text-2xl font-semibold text-slate-900">Sơ đồ kho 3D · {selectedZone}</h1>
           <Badge variant="outline" className="bg-white">DC-HN-01 / {selectedZone}</Badge>
-          {zoneMeta && <Badge variant="secondary">{zoneMeta.name}</Badge>}
+          {zoneMeta && <Badge variant="secondary">{zoneMeta.name} · {modeLabel(zoneMeta.storageMode)}</Badge>}
         </div>
         <p className="text-sm text-slate-500 mt-1">Mỗi Zone có 20 kệ riêng · 4 dãy × 5 kệ · mỗi kệ 20 ô · tổng 400 vị trí/Zone. Khối màu trên kệ thể hiện SKU đang lưu trong vị trí.</p>
       </div>
@@ -207,11 +213,22 @@ export default function Racks() {
           </select>
         </label>
         <Button variant="outline" onClick={() => navigate('/zones')}><MapPinned className="w-4 h-4 mr-1.5" />Quản lý Zone</Button>
-        {canManage && warehouseRacks.length < TARGET_RACKS && <Button onClick={handleInitialize} disabled={initializing || !anchorOrderId}>
+        {canManage && warehouseRacks.length < TARGET_RACKS && !zoneInspection.hasSurplus && <Button onClick={handleInitialize} disabled={initializing || !anchorOrderId}>
           {initializing ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Sparkles className="w-4 h-4 mr-1.5" />}Khởi tạo đủ 20 kệ
         </Button>}
       </div>
     </div>
+
+    {zoneInspection.hasSurplus && <Card className="border-amber-500/50 bg-amber-500/5">
+      <CardContent className="py-4 space-y-2 text-sm">
+        <div className="font-semibold text-amber-600 flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Có {zoneInspection.surplusRacks.length} bản ghi kệ dư/trùng — sơ đồ chỉ có 20 vị trí vật lý</div>
+        <p className="text-slate-600">Lỗi phát sinh từ khởi tạo kệ theo đơn hàng. Các bản ghi này chưa bị xóa hoặc điều chuyển tự động để bảo toàn hàng hóa; thống kê phía dưới áp dụng cho 20 kệ đang vẽ.</p>
+        <div className="flex flex-wrap gap-2">{zoneInspection.surplusRacks.map((rack) => {
+          const count = parts.filter((part) => part.rackId === rack.id).length;
+          return <Button key={rack.id} size="sm" variant="outline" onClick={() => openRack(rack.id)}>{rack.name} · {count} PART · Kiểm tra</Button>;
+        })}</div>
+      </CardContent>
+    </Card>}
 
     <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
       <MiniStat icon={Warehouse} label="Kệ vật lý trong Zone" value={`${warehouseRacks.length}/${TARGET_RACKS}`} sub={`${selectedZone} · R01–R20`} />
@@ -270,11 +287,13 @@ export default function Racks() {
       </div></CardHeader>
       <CardContent className="space-y-3">
         {warehouseRacks.length === 0 ? <div className="h-[520px] rounded-xl border border-dashed flex flex-col items-center justify-center text-center p-8">
-          <Warehouse className="w-12 h-12 text-slate-300 mb-3" /><p className="font-semibold text-slate-700">{selectedZone} chưa có kệ</p><p className="text-sm text-slate-400 mt-1 max-w-md">Đây là Zone độc lập. Bấm “Khởi tạo đủ 20 kệ” để tạo R01–R20 mới cho riêng {selectedZone}.</p><Button className="mt-4" onClick={handleInitialize} disabled={initializing || !anchorOrderId}>{initializing ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Sparkles className="w-4 h-4 mr-1.5" />}Khởi tạo {selectedZone}</Button>
+          <Warehouse className="w-12 h-12 text-slate-300 mb-3" /><p className="font-semibold text-slate-700">{selectedZone} chưa có kệ</p><p className="text-sm text-slate-400 mt-1 max-w-md">Đây là Zone độc lập. Bấm “Khởi tạo đủ 20 kệ” để tạo R01–R20 mới cho riêng {selectedZone}.</p><Button className="mt-4" onClick={handleInitialize} disabled={initializing || !anchorOrderId || zoneInspection.hasSurplus}>{initializing ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Sparkles className="w-4 h-4 mr-1.5" />}Khởi tạo {selectedZone}</Button>
         </div> : <WarehouseScene3D racks={rackSummaries} selectedRackId={selectedRackId} highlightedRackIds={highlightedRackIds} onSelectRack={handle3DRackClick} warehouseCode={WAREHOUSE_CODE} zoneCode={selectedZone} className="rounded-xl overflow-hidden border" />}
-        <div className="flex flex-wrap gap-3 text-[11px] text-slate-500"><Legend swatch="bg-slate-400" label="Trống" /><Legend swatch="bg-emerald-500" label="Đang sử dụng" /><Legend swatch="bg-amber-500" label="Gần đầy (≥80%)" /><Legend swatch="bg-indigo-500" label="Đầy 20/20 ô" /><Legend swatch="bg-red-500" label="Quá tải" /></div>
+
       </CardContent>
     </Card>
+
+    <InboundJourney3D />
 
     {query && <Card><CardHeader className="pb-2"><CardTitle className="text-base">Kết quả tìm trong {selectedZone}</CardTitle></CardHeader><CardContent>
       {matchedParts.length === 0 ? <p className="text-sm text-slate-400 py-3">Không tìm thấy sản phẩm phù hợp trong Zone này.</p> : <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">{matchedParts.slice(0, 30).map((part) => {
@@ -290,7 +309,7 @@ export default function Racks() {
         const meta = STATUS_META[rack.status]; const pct = (rack.usedSlots / SLOTS_PER_RACK) * 100;
         return <button type="button" key={rack.id} onClick={() => openRack(rack.id)} className="text-left rounded-xl border bg-white p-4 hover:border-indigo-300 hover:shadow-sm transition"><div className="flex items-start justify-between gap-2"><div><p className="font-bold text-slate-900">{rack.name}</p><p className="text-[11px] text-slate-400 mt-0.5">{rack.warehouseCode} / {rack.zoneCode}</p></div><Badge className={meta.badge}>{meta.label}</Badge></div><div className="mt-4 space-y-2"><div className="flex justify-between text-xs"><span className="text-slate-500">Ô sử dụng</span><strong>{rack.usedSlots}/20</strong></div><Progress value={pct} className="h-1.5" /><div className="grid grid-cols-2 gap-2 text-[11px] text-slate-500 pt-1"><span>{rack.partCount} PART</span><span className="text-right">{fmtNum(rack.totalWeight)} kg</span><span>{fmtDec(rack.totalCbm, 2)} m³</span><span className="text-right text-indigo-600 flex items-center justify-end gap-1">Chi tiết <ArrowRight className="w-3 h-3" /></span></div></div></button>;
       })}</div>
-      {rackSummaries.length < TARGET_RACKS && <div className="mt-4 rounded-lg border border-dashed bg-slate-50 p-4 flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-semibold text-slate-700">{selectedZone} còn thiếu {TARGET_RACKS - rackSummaries.length} kệ</p><p className="text-xs text-slate-400 mt-0.5">Chỉ tạo kệ mới trong {selectedZone}; kệ của Zone A/B/C khác không bị di chuyển.</p></div><Button variant="outline" onClick={handleInitialize} disabled={initializing || !anchorOrderId}>{initializing ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-1.5" />}Tạo R01–R20 cho {selectedZone}</Button></div>}
+      {rackSummaries.length < TARGET_RACKS && <div className="mt-4 rounded-lg border border-dashed bg-slate-50 p-4 flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-semibold text-slate-700">{selectedZone} còn thiếu {TARGET_RACKS - rackSummaries.length} kệ</p><p className="text-xs text-slate-400 mt-0.5">Chỉ tạo kệ mới trong {selectedZone}; kệ của Zone A/B/C khác không bị di chuyển.</p></div><Button variant="outline" onClick={handleInitialize} disabled={initializing || !anchorOrderId || zoneInspection.hasSurplus}>{initializing ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-1.5" />}Tạo R01–R20 cho {selectedZone}</Button></div>}
       </CardContent>
     </Card>
   </div>;
@@ -299,4 +318,4 @@ export default function Racks() {
 function MiniStat({ icon: Icon, label, value, sub, danger = false }) {
   return <Card><CardContent className="py-4 flex items-center gap-3"><div className={`w-9 h-9 rounded-lg flex items-center justify-center ${danger ? 'bg-red-50' : 'bg-indigo-50'}`}><Icon className={`w-4 h-4 ${danger ? 'text-red-600' : 'text-indigo-600'}`} /></div><div className="min-w-0"><p className="text-[11px] text-slate-400 truncate">{label}</p><p className="font-bold text-slate-800">{value}</p><p className="text-[10px] text-slate-400 truncate">{sub}</p></div></CardContent></Card>;
 }
-function Legend({ swatch, label }) { return <span className="inline-flex items-center gap-1.5"><span className={`w-2.5 h-2.5 rounded-sm ${swatch}`} />{label}</span>; }
+

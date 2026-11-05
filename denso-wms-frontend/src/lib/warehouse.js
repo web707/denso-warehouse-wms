@@ -1,6 +1,7 @@
 import { RACK_SPEC } from '@/lib/viz/rackLayout';
 import { RACK_SAFETY } from '@/lib/viz/rackSafety';
 import { calcRackStats } from '@/lib/calculations';
+import { inspectZoneRacks } from '@/lib/zoneRackInventory';
 
 /**
  * Nguồn duy nhất cho các quy tắc Zone → Kệ → Ô.
@@ -135,15 +136,22 @@ export function summarizeRack(rack, parts) {
 export function summarizeZone(zoneCode, racks, parts) {
   const zoneRacks = racks.filter((r) => zoneOf(r) === zoneCode).sort(compareRacks);
   const rackSummaries = zoneRacks.map((r) => summarizeRack(r, parts));
+  const audit = inspectZoneRacks(zoneRacks, parts);
+  const physicalIds = new Set(audit.physicalRacks.map((r) => r.id));
+  const physicalRacks = rackSummaries.filter((item) => physicalIds.has(item.rack.id));
   const statusCounts = Object.fromEntries(RACK_STATUS_ORDER.map((s) => [s, 0]));
   rackSummaries.forEach((r) => { statusCounts[r.status] += 1; });
   return {
     zoneCode,
-    racks: rackSummaries,
-    rackCount: zoneRacks.length,
-    usedRacks: rackSummaries.filter((r) => r.usedSlots > 0).length,
-    usedSlots: rackSummaries.reduce((s, r) => s + r.usedSlots, 0),
-    totalSlots: zoneRacks.length * SLOTS_PER_RACK,
+    racks: rackSummaries, // Complete raw record list for auditing/reporting historical inventory.
+    physicalRacks,
+    physicalRackCount: audit.physicalCount,
+    surplusRecordCount: audit.surplusRacks.length,
+    surplusWithStockCount: audit.surplusWithStock.length,
+    rackCount: audit.physicalCount,
+    usedRacks: physicalRacks.filter((r) => r.usedSlots > 0).length,
+    usedSlots: physicalRacks.reduce((s, r) => s + r.usedSlots, 0),
+    totalSlots: audit.physicalCount * SLOTS_PER_RACK,
     partCount: rackSummaries.reduce((s, r) => s + r.partCount, 0),
     totalWeight: rackSummaries.reduce((s, r) => s + r.totalWeight, 0),
     totalCbm: rackSummaries.reduce((s, r) => s + r.totalCbm, 0),
@@ -155,12 +163,15 @@ export function summarizeWarehouse(racks, parts) {
   const codes = [...new Set(racks.map(zoneOf))].sort();
   const zones = codes.map((code) => summarizeZone(code, racks, parts));
   const allRacks = zones.flatMap((z) => z.racks);
+  const physicalRacks = zones.flatMap((z) => z.physicalRacks);
   const statusCounts = Object.fromEntries(RACK_STATUS_ORDER.map((s) => [s, 0]));
-  allRacks.forEach((r) => { statusCounts[r.status] += 1; });
+  physicalRacks.forEach((r) => { statusCounts[r.status] += 1; });
   const rackIds = new Set(racks.map((r) => r.id));
   return {
     zones,
     racks: allRacks,
+    physicalRacks,
+    surplusRecordCount: zones.reduce((total, zone) => total + zone.surplusRecordCount, 0),
     statusCounts,
     usedSlots: zones.reduce((s, z) => s + z.usedSlots, 0),
     totalSlots: zones.reduce((s, z) => s + z.totalSlots, 0),

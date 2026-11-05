@@ -22,7 +22,7 @@ export class WarehouseZonesService {
     const warehouseCode = dto.warehouseCode.trim().toUpperCase();
     const exists = await this.zones.findOne({ where: { code, warehouseCode } });
     if (exists) throw new BadRequestException({ code: 'ZONE_EXISTS', message: `${code} đã tồn tại` });
-    return this.zones.save(this.zones.create({ ...dto, code, warehouseCode, description: dto.description || null, active: dto.active ?? true }));
+    return this.zones.save(this.zones.create({ ...dto, code, warehouseCode, description: dto.description || null, storageMode: dto.storageMode || 'ambient', active: dto.active ?? true }));
   }
 
   async update(id: string, dto: UpdateZoneDto) {
@@ -35,6 +35,13 @@ export class WarehouseZonesService {
     if (dto.name !== undefined) zone.name = dto.name;
     if (dto.description !== undefined) zone.description = dto.description || null;
     if (dto.active !== undefined) zone.active = dto.active;
+    if (dto.storageMode && dto.storageMode !== zone.storageMode) {
+      const zoneRacks = await this.racks.find({ where: { warehouseCode: oldWarehouse, zoneCode: oldCode }, relations: { parts: true } });
+      if (zoneRacks.some((r) => r.parts?.some((p) => p.quantityPcs > 0 || p.cartonCount > 0))) {
+        throw new BadRequestException({ code: 'ZONE_MODE_HAS_STOCK', message: 'Không thể đổi điều kiện bảo quản của Zone khi vẫn còn hàng. Hãy điều chuyển hết hàng trước.' });
+      }
+      zone.storageMode = dto.storageMode;
+    }
     const saved = await this.zones.save(zone);
     if (oldCode !== zone.code || oldWarehouse !== zone.warehouseCode) {
       await this.racks.update({ warehouseCode: oldWarehouse, zoneCode: oldCode }, { warehouseCode: zone.warehouseCode, zoneCode: zone.code });

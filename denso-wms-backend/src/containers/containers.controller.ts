@@ -73,6 +73,8 @@ export class ContainersController {
     return {
       createdCount: result.createdCount,
       renamedCount: result.renamedCount,
+      extraCount: result.extraCount,
+      totalRecords: result.totalRecords,
       racks: result.racks.map(toRack),
     };
   }
