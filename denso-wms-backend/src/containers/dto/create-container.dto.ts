@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNumber, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsIn, IsNumber, IsOptional, IsString, IsUUID } from 'class-validator';
+import { RACK_PRODUCT_FAMILIES } from '../../inventory/rack-product-family.rules';
 
 export class CreateContainerDto {
   @ApiProperty()
@@ -20,6 +21,11 @@ export class CreateContainerDto {
   @IsOptional()
   @IsString()
   warehouseCode?: string;
+
+  @ApiPropertyOptional({ description: 'Chủ đề kệ. Để trống để hệ thống chọn theo nhóm hàng đầu tiên.' })
+  @IsOptional()
+  @IsIn([...RACK_PRODUCT_FAMILIES])
+  productFamily?: string | null;
 
   @ApiPropertyOptional({ example: 'ZONE-A' })
   @IsOptional()

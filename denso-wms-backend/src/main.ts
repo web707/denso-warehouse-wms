@@ -14,11 +14,12 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
 
-  app.use(helmet({ crossOriginResourcePolicy: false }));
+  app.use(helmet());
   app.use(compression());
   app.use(cookieParser());
+  const allowedOrigins = config.get<any>('corsOrigin');
   app.enableCors({
-    origin: true,
+    origin: allowedOrigins && allowedOrigins.length > 0 && allowedOrigins[0] !== '*' ? allowedOrigins : true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin'],

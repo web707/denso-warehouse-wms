@@ -2,42 +2,23 @@ import { useEffect, useMemo, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Text, Edges } from '@react-three/drei';
 import { Boxes, CheckCircle2, MousePointerClick } from 'lucide-react';
+import { rackInventoryView, partDisplayColor } from '@/lib/viz/rackInventoryView';
+import { familyLabel, FAMILY_COLORS } from '@/lib/rackProductFamily';
 
 const W=2.32, H=2.15, D=0.8;
 const COLS=5, COL_GAP=3.1, ROW_GAP=2.8;
-const palette=['#0f766e','#2563eb','#7c3aed','#0284c7','#15803d','#b45309','#a21caf'];
 const statusColors={empty:'#94a3b8',active:'#10b981',near:'#f59e0b',full:'#6366f1',overload:'#ef4444'};
 const statusLabels={empty:'Kệ trống',active:'Đang sử dụng',near:'Gần đầy',full:'Đầy',overload:'Quá tải thực tế'};
-
 function Beam({pos,size,color='#1d4ed8',dimmed=false}) {return <mesh position={pos} castShadow={!dimmed} receiveShadow><boxGeometry args={size}/><meshStandardMaterial color={color} roughness={0.42} metalness={0.35} transparent={dimmed} opacity={dimmed ? 0.22 : 1} depthWrite={!dimmed}/></mesh>;}
-function colorFor(part) {
-  const key=`${part.productCode||''}${part.partName||''}`;
-  let h=0;
-  for (let i=0;i<key.length;i++) h=(h*31+key.charCodeAt(i))>>>0;
-  return palette[h % palette.length];
-}
 function occupiedPositions(parts=[]) {
-  const map=new Map();
-  const unknown=[];
-  for(const part of parts) {
-    if(Number(part.cartons||0)<=0 && Number(part.quantity||0)<=0) continue;
-    const n=part.preferredRackSlot;
-    if(Number.isInteger(n)&&n>=0&&n<20) {
-      if(!map.has(n))map.set(n,part);
-    } else unknown.push(part);
-  }
-  // Legacy lots with no slot index use a visual placeholder only.
-  for(const part of unknown) {
-    const free=Array.from({length:20},(_,i)=>i).find((i)=>!map.has(i));
-    if(free===undefined) break;
-    map.set(free,part);
-  }
-  return Array.from(map,([slot,part])=>({slot,part}));
+  const { slots } = rackInventoryView(parts);
+  return slots.filter((s)=>s.placements.length).map((s)=>({ slot:s.index,part:parts.find((p)=>p.id===s.placements[0].partId) }));
 }
 function RackVisual({rack,position,selected,highlighted,dimmed,onSelect,onHover}) {
   const [hovered,setHovered]=useState(false);
   const busy=occupiedPositions(rack.rackParts);
   const frameColor=selected?'#4338ca':highlighted?'#0891b2':'#1d4ed8';
+  const familyColor=FAMILY_COLORS[rack.family]||'#64748b';
   const statusColor=statusColors[rack.status]||statusColors.empty;
   const beams=[];
   for(let b=0;b<=5;b++)for(const z of [-D/2,D/2])beams.push(<Beam key={`post${b}${z}`} pos={[-W/2+b*W/5,H/2,z]} size={[0.047,H,0.047]} color={frameColor} dimmed={dimmed}/>);
@@ -55,13 +36,14 @@ function RackVisual({rack,position,selected,highlighted,dimmed,onSelect,onHover}
       return <group key={`${slot}-${part.id}`}>
         <mesh castShadow receiveShadow position={[x,y,0]} onClick={(e)=>{e.stopPropagation();onSelect?.(rack.id);}}>
           <boxGeometry args={[W/5*.80,H/4*.72,D*.72]}/>
-          <meshStandardMaterial color={colorFor(part)} roughness={0.68} transparent={dimmed} opacity={dimmed?0.13:1} depthWrite={!dimmed}/>{!dimmed&&<Edges scale={1.005} color="#1e293b" threshold={30}/>}
+          <meshStandardMaterial color={FAMILY_COLORS[rack.family] || partDisplayColor(part)} roughness={0.68} transparent={dimmed} opacity={dimmed?0.13:1} depthWrite={!dimmed}/>{!dimmed&&<Edges scale={1.005} color="#1e293b" threshold={30}/>}
         </mesh>
         <mesh position={[x,y-H/4*.33,0]} receiveShadow><boxGeometry args={[W/5*.84,.025,D*.78]}/><meshStandardMaterial color="#d6b98c" roughness={.95} transparent={dimmed} opacity={dimmed?0.2:1}/></mesh>
       </group>;
     })}
     <Text position={[0,H+.22,0]} color={dimmed?'#94a3b8':selected?'#4338ca':'#0f172a'} fontSize={.23} anchorX="center" anchorY="middle">{rack.name}</Text>
-    <Text position={[0,H+.46,0]} color={dimmed?'#94a3b8':rack.status==='overload'?'#dc2626':'#0f766e'} fontSize={.115} anchorX="center" anchorY="middle">{`${busy.length}/20 ô · ${rack.partCount||0} SKU`}</Text>
+    <Text position={[0,H+.43,0]} color={dimmed?'#94a3b8':familyColor} fontSize={.12} maxWidth={W*1.4} anchorX="center" anchorY="middle">{familyLabel(rack.family)}</Text>
+    <Text position={[0,H+.58,0]} color={dimmed?'#94a3b8':rack.status==='overload'?'#dc2626':'#0f766e'} fontSize={.105} anchorX="center" anchorY="middle">{`${busy.length}/20 ô · ${rack.partCount||0} PART`}</Text>
     {/* Details use a fixed top-right HUD instead of covering rack geometry. */}
   </group>;
 }
@@ -89,11 +71,12 @@ export default function WarehouseScene3D({racks=[],selectedRackId,highlightedRac
   const focusRack=layout.find((rack)=>rack.id===(selectedRackId||hoveredRackId));
   return <div className={`relative w-full rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 ${className}`} style={{minHeight:610,height:610}}>
     <div className="absolute left-3 top-3 z-10 flex items-center gap-2 bg-white/95 border border-slate-200 rounded-lg px-3 py-2 shadow-sm text-xs text-slate-700">
-      <Boxes className="w-4 h-4 text-indigo-600"/><b>{racks.length} kệ · {summary.used} ô có hàng</b>
+      <Boxes className="w-4 h-4 text-indigo-600"/><b>{racks.length} kệ · {summary.used} ô có vị trí</b>
       {recent && <span className="ml-2 flex items-center gap-1 text-emerald-700"><CheckCircle2 className="w-4 h-4"/> Đã đồng bộ</span>}
     </div>
     {focusRack && <div className="pointer-events-none absolute top-3 right-3 z-10 max-w-[210px] rounded-xl border border-slate-200 bg-white/95 px-3 py-2.5 text-xs text-slate-700 shadow-sm">
       <p className="font-bold text-sm">{focusRack.zoneCode} · {focusRack.name}</p>
+      <p className="font-semibold mt-1 text-indigo-700">{familyLabel(focusRack.family)}</p>
       <p className="text-slate-500 mt-1">{focusRack.usedSlots || 0}/20 ô · {focusRack.partCount || 0} PART</p>
       <p className="mt-0.5">{Number(focusRack.totalWeight || 0).toLocaleString('vi-VN')} kg</p>
     </div>}

@@ -13,6 +13,7 @@ import { Part } from '../parts/entities/part.entity';
 import { WarehouseZone } from '../warehouse-zones/entities/warehouse-zone.entity';
 import { assertCapacity, rackLimits } from '../inventory/inventory.rules';
 import { assertExpiryDeclared, assertStoragePlacement, preferredSlotsByExpiry, STORAGE_CLASSES, suggestStorageClass } from '../inventory/storage-placement.rules';
+import { assertRackProductFamily } from '../inventory/rack-product-family.rules';
 import { ImportPreviewOrder, ImportResult, ImportRowError } from './dto/import-preview.dto';
 
 const TEMPLATE_HEADERS = [
@@ -359,6 +360,7 @@ export class ImportsService {
             const zone = await manager.getRepository(WarehouseZone).findOne({ where: { warehouseCode: forcedRack.warehouseCode, code: forcedRack.zoneCode } });
             assertExpiryDeclared(p.storageClass, p.expirationDate);
             assertStoragePlacement({ productClass: p.storageClass, zoneMode: zone?.storageMode, rackClasses: peers.map((v) => v.storageClass), productName: p.partName, rackName: `${forcedRack.zoneCode}/${forcedRack.name}` });
+            assertRackProductFamily({ rackFamily: forcedRack.productFamily, peers, productName: p.partName, productClass: p.storageClass, rackName: forcedRack.name });
             const busy = new Set(peers.filter((v) => v.preferredRackSlot !== null).map((v) => v.preferredRackSlot));
             let lastError: unknown;
             for (const i of preferredSlotsByExpiry(p.expirationDate)) {

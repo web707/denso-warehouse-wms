@@ -2,6 +2,9 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '@/api';
 import { useStore } from '@/lib/store';
+import { useAuth } from '@/lib/auth';
+import { canWrite } from '@/lib/access';
+import { FAMILY_COLORS, FAMILY_LABELS, familyLabel, rackFamily, getFamily } from '@/lib/rackProductFamily';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,33 +15,38 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ArrowLeft, Loader2, PlayCircle, AlertTriangle, Download, Search, Warehouse, MapPin, Boxes, Weight, MoveRight, ShieldCheck, Upload } from 'lucide-react';
 import RackScene3D from '@/components/viz/RackScene3D';
 import RackLevelView from '@/components/viz/RackLevelView';
-import { buildRackLayout } from '@/lib/viz/rackLayout';
+import { rackInventoryView } from '@/lib/viz/rackInventoryView';
 import { divisionColor } from '@/lib/viz/divisionColors';
 import { RACK_SAFETY, LOAD_STATUS_META, loadPercent, loadStatus } from '@/lib/viz/rackSafety';
 import { fmtDec, fmtNum } from '@/lib/calculations';
+import { RACK_STATUS_META, summarizeRack } from '@/lib/warehouse';
 import ImportDialog from '@/components/ImportDialog';
 
 const COLOR_MODE_PART = '__part__';
+const COLOR_MODE_FAMILY = '__family__';
 const COLOR_MODE_ALL_DIVISION = '__all_division__';
 
 function placementWeight(p, partsById) {
   const part = partsById[p.partId];
-  if (!part?.cartons) return 0;
-  return Number(part.weight || 0) / Number(part.cartons || 1);
+  // Each canonical placement denotes the entire lot occupying this slot.
+  return Number(part?.weight || 0);
 }
 
 export default function RackPlan() {
   const { rackId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { racks, parts, orders, divisions, assignPart } = useStore();
+  const { racks, parts, orders, divisions, assignPart, updateRack } = useStore();
+  const { user } = useAuth();
+  const canConfigureRack = canWrite(user?.role, 'racks');
+  const [savingFamily, setSavingFamily] = useState(false);
   const { toast } = useToast();
 
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(true);
   const [solving, setSolving] = useState(false);
   const [visibleLevel, setVisibleLevel] = useState('all');
-  const [colorMode, setColorMode] = useState(COLOR_MODE_PART);
+  const [colorMode, setColorMode] = useState(COLOR_MODE_FAMILY);
   const [search, setSearch] = useState(() => searchParams.get('q') || '');
   const [selectedSlotCode, setSelectedSlotCode] = useState(null);
   const [moving, setMoving] = useState(false);
@@ -46,16 +54,20 @@ export default function RackPlan() {
 
   const rack = racks.find((r) => r.id === rackId);
   const rackOrder = orders.find((o) => o.id === rack?.orderId);
+  const detectedFamily = rackFamily(rack, parts);
   const rackParts = useMemo(() => parts.filter((p) => p.rackId === rackId), [parts, rackId]);
+  const rackOverview = useMemo(() => rack ? summarizeRack(rack, parts) : null, [rack, parts]);
+  const rackOverviewMeta = RACK_STATUS_META[rackOverview?.status || 'empty'];
   const partsById = useMemo(() => Object.fromEntries(parts.map((p) => [p.id, p])), [parts]);
 
   const getColor = useCallback((p) => {
+    if (colorMode === COLOR_MODE_FAMILY) return FAMILY_COLORS[getFamily(partsById[p.partId])] || p.colorHex;
     if (colorMode === COLOR_MODE_PART) return p.colorHex;
     return divisionColor(partsById[p.partId]?.divisionCode);
   }, [colorMode, partsById]);
 
   const isDimmed = useCallback((p) => {
-    if (colorMode === COLOR_MODE_PART || colorMode === COLOR_MODE_ALL_DIVISION) return false;
+    if (colorMode === COLOR_MODE_PART || colorMode === COLOR_MODE_FAMILY || colorMode === COLOR_MODE_ALL_DIVISION) return false;
     return partsById[p.partId]?.divisionCode !== colorMode;
   }, [colorMode, partsById]);
 
@@ -123,7 +135,18 @@ export default function RackPlan() {
     }
   };
 
-  const layout = useMemo(() => buildRackLayout(plan?.placements || []), [plan]);
+  const saveFamily = async (value) => {
+    if (!rack || !canConfigureRack || savingFamily) return;
+    setSavingFamily(true);
+    try {
+      await updateRack(rack.id, { productFamily: value === 'auto' ? null : value });
+      toast({ title: 'Đã cập nhật chủ đề kệ', description: 'Backend kiểm tra toàn bộ hàng trong kệ trước khi thay đổi.' });
+    } catch (err) { toast({ variant:'destructive', title:'Không thể đổi chủ đề', description:err.message }); }
+    finally { setSavingFamily(false); }
+  };
+
+  const layout = useMemo(() => rackInventoryView(rackParts), [rackParts]);
+  const unassignedCount = layout.unassigned.length;
 
   const slotMetrics = useMemo(() => {
     const result = {};
@@ -139,7 +162,7 @@ export default function RackPlan() {
         maxKg: RACK_SAFETY.slotMaxKg,
         percent: loadPercent(weightKg, RACK_SAFETY.slotMaxKg),
         status: loadStatus(weightKg, RACK_SAFETY.slotMaxKg),
-        cartonCount: slot.placements.length,
+        cartonCount: slot.placements.reduce((sum,p)=>sum+Number(p.cartonCount||0),0),
         partIds,
         partNames,
       };
@@ -160,7 +183,7 @@ export default function RackPlan() {
     };
   }), [layout.slots, slotMetrics]);
 
-  const rackWeight = Number(plan?.weightUsedKg || 0);
+  const rackWeight = rackParts.reduce((sum,part)=>sum+Number(part.weight||0),0);
   const rackLoadStatus = loadStatus(rackWeight, RACK_SAFETY.rackMaxKg);
   const rackLoadPct = loadPercent(rackWeight, RACK_SAFETY.rackMaxKg);
   const alertSlots = Object.values(slotMetrics).filter((m) => m.status === 'near' || m.status === 'overload').length;
@@ -209,8 +232,7 @@ export default function RackPlan() {
       await assignPart(partId, rackId, target.index);
       const data = await api.storage.solve(rackId);
       setPlan(data);
-      const solvedLayout = buildRackLayout(data.placements || []);
-      const actualSlot = solvedLayout.slots.find((s) => s.placements.some((p) => p.partId === partId));
+      const actualSlot = target; // Server confirmed the preferred slot; inventory state will refresh.
       setSelectedSlotCode(actualSlot?.code || targetCode);
       toast({
         title: actualSlot?.code === targetCode ? 'Đã điều chuyển vị trí' : 'Đã tính lại vị trí an toàn',
@@ -236,7 +258,8 @@ export default function RackPlan() {
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-2xl font-semibold text-slate-900">{rack?.name || 'Kệ kho'}</h1>
               <Badge variant="secondary">20 ô · 5×4</Badge>
-              <Badge className={LOAD_STATUS_META[rackLoadStatus].badge}>{LOAD_STATUS_META[rackLoadStatus].label}</Badge>
+              <Badge variant="outline">{familyLabel(detectedFamily)}</Badge>
+              <Badge className={rackOverviewMeta.badge}>{rackOverviewMeta.label}</Badge>
             </div>
             <p className="text-sm text-slate-500 mt-1 flex items-center gap-1.5">
               <Warehouse className="w-3.5 h-3.5" /> DC-HN-01
@@ -244,7 +267,13 @@ export default function RackPlan() {
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap items-center">
+          {canConfigureRack && <label className="text-xs text-slate-500">Chủ đề kệ
+            <select className="ml-2 h-9 max-w-[200px] rounded-md border px-2 bg-white text-slate-900" value={rack?.productFamily || 'auto'} disabled={savingFamily} onChange={(e)=>saveFamily(e.target.value)}>
+              <option value="auto">Tự nhận theo hàng trong kệ</option>
+              {Object.entries(FAMILY_LABELS).map(([value,label])=><option key={value} value={value}>{label}</option>)}
+            </select>
+          </label>}
           <Button variant="outline" onClick={handleExport} disabled={!plan}>
             <Download className="w-4 h-4 mr-1.5" /> Xuất Excel vị trí
           </Button>
@@ -253,28 +282,31 @@ export default function RackPlan() {
           </Button>
           <Button onClick={handleSolve} disabled={solving}>
             {solving ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <PlayCircle className="w-4 h-4 mr-1.5" />}
-            Tối ưu phân bổ vị trí
+            Tính bố trí thùng tham khảo
           </Button>
         </div>
       </div>
 
       {loading && <Card><CardContent className="py-12 text-center text-sm text-slate-400">Đang tải...</CardContent></Card>}
 
-      {!loading && !plan && (
+      {!loading && !plan && rackParts.length === 0 && (
         <Card className="border-dashed">
           <CardContent className="py-12 text-center text-sm text-slate-400 space-y-3">
             <Warehouse className="w-10 h-10 mx-auto text-slate-300" />
-            <p>Kệ chưa có sơ đồ vị trí. Nhấn “Tối ưu phân bổ vị trí” để tạo bố trí S01–S20.</p>
+            <p>Kệ chưa có sơ đồ vị trí. Nhấn “Tính bố trí thùng tham khảo” để tạo bố trí S01–S20.</p>
           </CardContent>
         </Card>
       )}
 
-      {!loading && plan && (
+      {!loading && (plan || rackParts.length > 0) && (
         <>
-          {plan.violations?.length > 0 && (
+          {unassignedCount > 0 && <div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            Có {unassignedCount} PART đã gán kệ nhưng chưa có mã ô S01–S20. Mô hình không tự dựng vị trí giả; hãy điều chuyển/gán ô để đồng bộ.
+          </div>}
+          {plan?.violations?.length > 0 && (
             <Card className="border-amber-200 bg-amber-50/40">
               <CardContent className="py-3 space-y-1.5">
-                {plan.violations.map((v, i) => (
+                {plan?.violations?.map((v, i) => (
                   <div key={`${v.code}-${i}`} className="flex items-start gap-2 text-xs">
                     <AlertTriangle className={v.severity === 'error' ? 'w-3.5 h-3.5 text-red-500 mt-0.5' : 'w-3.5 h-3.5 text-amber-500 mt-0.5'} />
                     <span className={v.severity === 'error' ? 'text-red-700' : 'text-amber-700'}>{v.message}</span>
@@ -331,6 +363,7 @@ export default function RackPlan() {
                 <Select value={colorMode} onValueChange={setColorMode}>
                   <SelectTrigger className="w-[210px] h-9 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
+                    <SelectItem value={COLOR_MODE_FAMILY}>Màu theo chủ đề kệ</SelectItem>
                     <SelectItem value={COLOR_MODE_PART}>Màu theo PART</SelectItem>
                     <SelectItem value={COLOR_MODE_ALL_DIVISION}>Màu theo Division</SelectItem>
                     {divisions.map((d) => <SelectItem key={d.code} value={d.code}>Chỉ {d.name}</SelectItem>)}
@@ -348,7 +381,8 @@ export default function RackPlan() {
                 </div>
               )}
 
-              <div className="flex flex-wrap gap-3 text-[11px] text-slate-500">
+              <div className="flex flex-wrap gap-3 text-[11px] text-slate-500" aria-label="Chú giải tải trọng ô">
+                <span className="font-semibold">Theo tải trọng từng ô:</span>
                 {Object.entries(LOAD_STATUS_META).map(([key, meta]) => (
                   <span key={key} className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: meta.color }} />{meta.label}</span>
                 ))}

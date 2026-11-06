@@ -7,11 +7,12 @@ import { isReadOnly } from '@/lib/access';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MASAN_CATEGORIES, MASAN_BRAND_COUNT, MASAN_REFERENCE_PRODUCTS, countMatchingInventory, normalizeCatalogText } from '@/lib/masanCatalog';
+import { X, MapPin, PackageSearch } from 'lucide-react';
 
 const ALL = 'all';
 const CARD_ICONS = [Tag, Boxes, PackagePlus, BookOpen, Layers3, Tag, Boxes, Building2];
 
-function BrandSection({ brand, isService, parts, orderId, canCreate }) {
+function BrandSection({ brand, isService, parts, racks, orderId, canCreate, onLocate }) {
   const [expanded, setExpanded] = useState(false);
   const visibleProducts = expanded ? brand.products : brand.products.slice(0, 4);
   return (
@@ -28,12 +29,13 @@ function BrandSection({ brand, isService, parts, orderId, canCreate }) {
         <>
           <div className="mt-3 space-y-2">
             {visibleProducts.map((name) => {
-              const existingCount = countMatchingInventory(parts, name);
+              const matches = parts.filter((p) => normalizeCatalogText(p.partName) === normalizeCatalogText(name));
+              const existingCount = matches.length;
               return (
                 <div key={name} className="flex gap-2 items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5">
                   <div className="min-w-0">
-                    <p className="text-xs font-medium text-slate-800 break-words">{name}</p>
-                    {existingCount > 0 && <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-emerald-700"><CheckCircle2 className="h-3 w-3" /> {existingCount} bản ghi cùng tên trong kho</p>}
+                    <button type="button" onClick={() => onLocate(name, matches)} className="text-left text-xs font-semibold text-slate-800 hover:text-emerald-700 hover:underline break-words" title={`Xem vị trí lưu kho của ${name}`}>{name}</button>
+                    {existingCount > 0 ? <button type="button" onClick={() => onLocate(name, matches)} className="mt-1 flex items-center gap-1 text-[11px] text-emerald-700 hover:underline"><MapPin className="h-3 w-3" /> Xem {existingCount} vị trí/lô trong kho</button> : <p className="mt-1 text-[10px] text-slate-400">Chưa có tồn kho · bấm để xem</p>}
                   </div>
                   {canCreate && orderId && (
                     <Link
@@ -61,7 +63,8 @@ function BrandSection({ brand, isService, parts, orderId, canCreate }) {
 }
 
 export default function Catalog() {
-  const { parts, orders } = useStore();
+  const { parts, orders, racks } = useStore();
+  const [locating, setLocating] = useState(null);
   const { user } = useAuth();
   const [query, setQuery] = useState('');
   const [categoryId, setCategoryId] = useState(ALL);
@@ -88,6 +91,10 @@ export default function Catalog() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 md:p-8">
+      {locating && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4" onClick={() => setLocating(null)}><section role="dialog" aria-modal="true" aria-label="Vị trí tồn kho" className="w-full max-w-xl max-h-[80vh] overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl text-slate-900" onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3"><div><h2 className="text-lg font-bold">{locating.name}</h2><p className="text-sm text-slate-500">Các lô hàng và vị trí lưu trữ hiện tại</p></div><button type="button" onClick={() => setLocating(null)} aria-label="Đóng" className="rounded-lg p-2 hover:bg-slate-100"><X className="w-4 h-4"/></button></div>
+        <div className="mt-4 space-y-2">{locating.matches.length === 0 ? <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Sản phẩm này chưa có bản ghi tồn kho; cần thêm PART trước khi tra cứu vị trí.</p> : locating.matches.map((part) => {const rack=racks.find((r)=>r.id===part.rackId); return <div key={part.id} className="flex items-start justify-between gap-3 rounded-lg border p-3"><div className="text-xs space-y-1"><p className="font-semibold">Lô: {part.lotNumber || part.productCode || part.id.slice(0,8)}</p><p>{rack ? `DC-HN-01 / ${rack.zoneCode} / ${rack.name}` : "Chưa phân bổ kệ"} · {Number.isInteger(part.preferredRackSlot) ? `S${String(part.preferredRackSlot+1).padStart(2,'0')}` : "Chưa gán ô"}</p><p className="text-slate-500">{part.cartons || 0} thùng · {part.quantity || 0} đơn vị</p></div>{rack&& <Link to={`/racks/${encodeURIComponent(rack.id)}/plan?q=${encodeURIComponent(part.partName)}`} className="shrink-0 text-xs font-semibold text-emerald-700 hover:underline">Mở kệ ↗</Link>}</div>})}</div>
+      </section></div>}
       <header className="rounded-2xl border border-emerald-200 bg-white p-5 shadow-sm sm:p-7">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="max-w-2xl">
@@ -161,7 +168,7 @@ export default function Catalog() {
                   <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">{cat.brands.length} thương hiệu{isService ? ' · Dịch vụ' : ''}</span>
                 </div>
                 <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5 xl:grid-cols-3">
-                  {cat.brands.map((brand) => <BrandSection key={brand.name} brand={brand} isService={isService} parts={parts} orderId={orderId} canCreate={canCreate} />)}
+                  {cat.brands.map((brand) => <BrandSection key={brand.name} brand={brand} isService={isService} parts={parts} racks={racks} orderId={orderId} canCreate={canCreate} onLocate={(name,matches)=>setLocating({name,matches})} />)}
                 </div>
               </section>
             );

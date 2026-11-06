@@ -1,0 +1,20 @@
+MASAN Consumer WMS V8.4 - Kiểm tra & giới hạn
+
+Các thành phần đã cập nhật:
+- Backend: định nghĩa nhóm hàng theo chủ đề, kiểm tra trên 5 luồng tạo/gán/import/giao dịch/tự phân bổ.
+- Rack: cột product_family mới, cấu hình chủ đề, kiểm tra thay đổi khi có hàng và khớp chế độ bảo quản của Zone.
+- Frontend: chọn chủ đề trên trang chi tiết kệ, gợi ý kệ phù hợp trong form Thêm hàng/điều chuyển, hiển thị màu & nhãn chủ đề trên 3D.
+- Bộ demo mới: ZONE-TEST-3R / R01 gia vị & nước mắm / R02 mì / R03 đồ uống, 20 ô/kệ, không xóa dữ liệu.
+
+Đã kiểm tra:
+- 277 file JS/JSX/TS trong source không có lỗi cú pháp (TypeScript parser).
+- 13 trường hợp suy luận chủ đề và chặn trộn nhóm đạt trong bộ kiểm tra độc lập.
+- Không thay đổi thông tin xác thực đăng nhập, không đóng gói .env.
+- Migration thêm cột là additive và không tự chỉnh tồn kho.
+
+Chưa kiểm thử:
+- npm build đầy đủ (container không có node_modules của dự án).
+- End-to-end với PostgreSQL, trang web Vercel và WebGL của người dùng.
+
+BẮT BUỘC TRƯỚC KHI DEPLOY: sao lưu DB, npm install, npm run migration:run, cập nhật cả backend/frontend; test bản dữ liệu demo trên database thử riêng.
+LƯU Ý: Nếu đã nạp seed V8.3 R01 mì/R02 nước mắm, seed mới sẽ từ chối sửa lại dữ liệu hiện có. Không tự xóa/move hàng lịch sử.

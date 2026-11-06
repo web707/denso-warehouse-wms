@@ -1,7 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsDateString, IsIn, IsInt, IsOptional, IsPositive, IsString, IsUUID, Min } from 'class-validator';
+import { IsDateString, IsIn, IsInt, IsOptional, IsPositive, IsString, IsUUID, Min, Max } from 'class-validator';
 
 export class CreatePartDto {
+  @ApiPropertyOptional({ description: 'Rack selected in new-part form. Atomic create + placement.' })
+  @IsOptional() @IsUUID() rackId?: string;
+  @ApiPropertyOptional({ description: '0-based slot index, S01=0' })
+  @IsOptional() @IsInt() @Min(0) @Max(19) slotIndex?: number;
+
   @ApiPropertyOptional({ description: 'Nhóm bảo quản đã xác nhận từ nhãn/nhà cung cấp' })
   @IsOptional()
   @IsIn(['unknown', 'dry_food', 'condiments', 'beverages', 'chilled_food', 'produce', 'household'])

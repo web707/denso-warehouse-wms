@@ -28,6 +28,7 @@ function toRack(row: Container) {
     name: row.name,
     warehouseCode: row.warehouseCode,
     zoneCode: row.zoneCode,
+    productFamily: row.productFamily,
     rackType: row.containerType
       ? {
           id: row.containerType.id,
@@ -93,6 +94,7 @@ export class ContainersController {
       name: string;
       warehouseCode?: string;
       zoneCode?: string;
+      productFamily?: string | null;
       maxCbmOverride?: number;
       maxPayloadKgOverride?: number;
     },
@@ -103,6 +105,7 @@ export class ContainersController {
       name: body.name,
       warehouseCode: body.warehouseCode,
       zoneCode: body.zoneCode,
+      productFamily: body.productFamily,
       maxCbmOverride: body.maxCbmOverride,
       maxPayloadKgOverride: body.maxPayloadKgOverride,
     };
@@ -119,6 +122,7 @@ export class ContainersController {
       name?: string;
       warehouseCode?: string;
       zoneCode?: string;
+      productFamily?: string | null;
       maxCbmOverride?: number;
       maxPayloadKgOverride?: number;
     },
@@ -129,6 +133,7 @@ export class ContainersController {
       name: body.name,
       warehouseCode: body.warehouseCode,
       zoneCode: body.zoneCode,
+      productFamily: body.productFamily,
       maxCbmOverride: body.maxCbmOverride,
       maxPayloadKgOverride: body.maxPayloadKgOverride,
     };

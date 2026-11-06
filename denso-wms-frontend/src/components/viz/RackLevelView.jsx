@@ -31,7 +31,7 @@ export default function RackLevelView({ level, slots, partsById, selectedSlotCod
                 <div className="mt-2">
                   <span className="inline-block w-2 h-2 rounded-full mr-1" style={{ background: part.color }} />
                   <span className="text-[11px] font-semibold text-slate-700 line-clamp-2">{part.partName}</span>
-                  <p className="text-[10px] text-slate-400 mt-1">{slot.placements.length} thùng</p>
+                  <p className="text-[10px] text-slate-400 mt-1">{slot.placements.reduce((n,p)=>n+Number(p.cartonCount||0),0)} thùng</p>
                 </div>
               ) : (
                 <p className="text-[11px] text-slate-300 mt-4 text-center">Trống</p>

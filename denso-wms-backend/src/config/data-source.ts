@@ -9,7 +9,7 @@ loadEnv();
 // The running Nest app uses buildTypeOrmOptions() in typeorm.config.ts instead.
 // A single default export only — the CLI errors if it finds more than one.
 const host = process.env.DB_HOST || 'localhost';
-const isRemote = host !== 'localhost' && host !== '127.0.0.1';
+const isRemote = host && host !== 'localhost' && host !== '127.0.0.1';
 const useSsl = isRemote || process.env.DB_SSL === 'true' || process.env.NODE_ENV === 'production';
 
 const AppDataSource = new DataSource({

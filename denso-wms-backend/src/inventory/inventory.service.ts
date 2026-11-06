@@ -7,6 +7,7 @@ import { Container } from '../containers/entities/container.entity';
 import { Part } from '../parts/entities/part.entity';
 import { WarehouseZone } from '../warehouse-zones/entities/warehouse-zone.entity';
 import { assertExpiryDeclared, assertStoragePlacement, preferredSlotsByExpiry } from './storage-placement.rules';
+import { assertRackProductFamily } from './rack-product-family.rules';
 import { CreateInventoryTransactionDto } from './dto/create-inventory-transaction.dto';
 import { QueryHeatmapDto } from './dto/query-heatmap.dto';
 import { InventoryTransaction, InventoryTransactionType } from './entities/inventory-transaction.entity';
@@ -148,6 +149,7 @@ export class InventoryService {
       rackClasses: inRack.filter((p) => p.id !== part.id).map((p) => p.storageClass),
       productName: part.partName, rackName: `${rack.zoneCode}/${rack.name}`,
     });
+    assertRackProductFamily({ rackFamily: rack.productFamily, peers: inRack.filter((p) => p.id !== part.id), productName: part.partName, productClass: part.storageClass, rackName: `${rack.zoneCode}/${rack.name}` });
     const toLoad = (p: Part): LoadItem => ({ weightKg: Number(p.totalWeightKg), cbm: Number(p.cbm), slot: p.preferredRackSlot });
     const mine = inRack.find((p) => p.id === part.id);
     assertCapacity({
@@ -190,8 +192,8 @@ export class InventoryService {
         // available racks in the same warehouse. A PART is atomic: do not split one
         // stock record between two racks. Never save an over-capacity placement.
         const newCartons = part.cartonCount + req.cartons;
-        const allRacks = (await em.find(Container, { where: { warehouseCode: 'DENSO-WH' }, order: { zoneCode: 'ASC', name: 'ASC' } }))
-          .filter((r) => !r.orderId || r.orderId === part.orderId);
+        // Racks are physical shared locations, not owned by the first order ever placed there.
+        const allRacks = await em.find(Container, { where: { warehouseCode: 'DENSO-WH' }, order: { zoneCode: 'ASC', name: 'ASC' } });
         const candidateIds = dto.toRackId
           ? [dto.toRackId]
           : (fromRackId ? [fromRackId] : allRacks.map((rack) => rack.id));

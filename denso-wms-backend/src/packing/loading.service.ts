@@ -9,6 +9,7 @@ import { Order, OrderStatus } from '../orders/entities/order.entity';
 import { Part } from '../parts/entities/part.entity';
 import { WarehouseZone } from '../warehouse-zones/entities/warehouse-zone.entity';
 import { assertExpiryDeclared, assertStoragePlacement, preferredSlotsByExpiry } from '../inventory/storage-placement.rules';
+import { assertRackProductFamily } from '../inventory/rack-product-family.rules';
 import { assertCapacity, rackLimits } from '../inventory/inventory.rules';
 import { CartonPlacement } from './entities/carton-placement.entity';
 import { LoadPlan } from './entities/load-plan.entity';
@@ -197,7 +198,8 @@ export class LoadingService {
       try {
         assertExpiryDeclared(p.storageClass, p.expirationDate);
         assertStoragePlacement({ productClass: p.storageClass, zoneMode: zone?.storageMode, rackClasses: [...alreadyAssigned, ...accepted].map((part) => part.storageClass), productName: p.partName, rackName: container.name });
-      } catch { break; }
+        assertRackProductFamily({ rackFamily: container.productFamily, peers: [...alreadyAssigned, ...accepted], productName: p.partName, productClass: p.storageClass, rackName: container.name });
+      } catch { continue; /* Skip other families: keep looking for matching lots. */ }
       const availableSlots = preferredSlotsByExpiry(p.expirationDate).filter((i) => !used.has(i));
       const destinationSlot = availableSlots.find((i) => {
         try {

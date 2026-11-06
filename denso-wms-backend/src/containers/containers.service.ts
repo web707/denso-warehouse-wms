@@ -8,6 +8,9 @@ import { CreateContainerDto } from './dto/create-container.dto';
 import { UpdateContainerDto } from './dto/update-container.dto';
 import { Container } from './entities/container.entity';
 import { Part } from '../parts/entities/part.entity';
+import { assertRackProductFamily, rackFamilyStorageMode, RACK_PRODUCT_FAMILIES } from '../inventory/rack-product-family.rules';
+import { WarehouseZone } from '../warehouse-zones/entities/warehouse-zone.entity';
+import { assertStoragePlacement } from '../inventory/storage-placement.rules';
 
 @Injectable()
 export class ContainersService {
@@ -58,6 +61,7 @@ export class ContainersService {
   }
 
   async create(dto: CreateContainerDto): Promise<Container> {
+    if (dto.productFamily && !RACK_PRODUCT_FAMILIES.includes(dto.productFamily as typeof RACK_PRODUCT_FAMILIES[number])) throw new BadRequestException({ code:'RACK_INVALID_FAMILY', message:'Chủ đề kệ không hợp lệ' });
     const name = this.validatePhysicalRackName(dto.name);
     const warehouseCode = (dto.warehouseCode || 'DENSO-WH').trim().toUpperCase();
     const zoneCode = (dto.zoneCode || 'ZONE-A').trim().toUpperCase();
@@ -74,12 +78,17 @@ export class ContainersService {
       if (existing.some((rack) => rack.name.trim().toUpperCase() === name)) {
         throw new BadRequestException({ code: 'ZONE_RACK_DUPLICATE', message: `Kệ ${name} đã tồn tại trong ${zoneCode}.` });
       }
+      if (dto.productFamily) {
+        const zone = await em.findOne(WarehouseZone, { where:{ warehouseCode, code:zoneCode } });
+        if (rackFamilyStorageMode(dto.productFamily) !== (zone?.storageMode || 'ambient')) throw new BadRequestException({ code:'RACK_FAMILY_ZONE_MISMATCH', message:'Chủ đề kệ không phù hợp với điều kiện bảo quản của Zone.' });
+      }
       return em.save(Container, em.create(Container, {
         containerTypeId: dto.containerTypeId,
         orderId: dto.orderId,
         name,
         warehouseCode,
         zoneCode,
+        productFamily: dto.productFamily || null,
         maxCbmOverride: dto.maxCbmOverride?.toString() ?? null,
         maxPayloadKgOverride: dto.maxPayloadKgOverride?.toString() ?? null,
       }));
@@ -116,6 +125,26 @@ export class ContainersService {
         if (records.some((rack) => rack.id !== id && rack.name.trim().toUpperCase() === targetName.trim().toUpperCase())) {
           throw new BadRequestException({ code: 'ZONE_RACK_DUPLICATE', message: `Kệ ${targetName} đã tồn tại trong ${targetZone}.` });
         }
+      }
+      if (dto.productFamily && !RACK_PRODUCT_FAMILIES.includes(dto.productFamily as typeof RACK_PRODUCT_FAMILIES[number])) throw new BadRequestException({ code:'RACK_INVALID_FAMILY', message:'Chủ đề kệ không hợp lệ' });
+      if (moving || dto.productFamily !== undefined) {
+        const targetFamily = dto.productFamily === undefined ? container.productFamily : dto.productFamily;
+        const targetZoneEntity = await em.findOne(WarehouseZone, { where: {warehouseCode: targetWarehouse, code: targetZone} });
+        if (rackFamilyStorageMode(targetFamily) && rackFamilyStorageMode(targetFamily) !== (targetZoneEntity?.storageMode || 'ambient')) {
+          throw new BadRequestException({ code:'RACK_FAMILY_ZONE_MISMATCH', message:'Chủ đề kệ không phù hợp Zone đích.' });
+        }
+        const stocked = await em.find(Part, { where: {containerId: id} });
+        for (const p of stocked) {
+          assertStoragePlacement({productClass:p.storageClass, zoneMode:targetZoneEntity?.storageMode, rackClasses:stocked.filter(other=>other.id!==p.id).map(other=>other.storageClass), productName:p.partName, rackName:container.name});
+        }
+      }
+      if (dto.productFamily !== undefined) {
+        // A rack already containing products cannot be relabeled to a different family.
+        const occupants = await em.find(Part, { where: { containerId: id } });
+        for (const p of occupants) {
+          assertRackProductFamily({ rackFamily: dto.productFamily, peers: occupants.filter((other) => other.id !== p.id), productName: p.partName, productClass: p.storageClass, rackName: container.name });
+        }
+        container.productFamily = dto.productFamily || null;
       }
       if (dto.containerTypeId) container.containerTypeId = dto.containerTypeId;
       if (dto.orderId !== undefined) container.orderId = dto.orderId;

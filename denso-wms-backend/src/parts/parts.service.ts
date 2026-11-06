@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FindOptionsWhere, Not, Repository } from 'typeorm';
-import { HistoryEventType } from '../history/entities/history-event.entity';
+import { HistoryEvent, HistoryEventType } from '../history/entities/history-event.entity';
 import { Container } from '../containers/entities/container.entity';
 import { HistoryService } from '../history/history.service';
 import { nextPartColor } from './constants/part-colors';
@@ -14,6 +14,7 @@ import { Part } from './entities/part.entity';
 import { DataSource } from 'typeorm';
 import { WarehouseZone } from '../warehouse-zones/entities/warehouse-zone.entity';
 import { assertExpiryDeclared, assertStoragePlacement, preferredSlotsByExpiry, suggestStorageClass } from '../inventory/storage-placement.rules';
+import { assertRackProductFamily } from '../inventory/rack-product-family.rules';
 import { assertCapacity, rackLimits } from '../inventory/inventory.rules';
 
 function computeCbm(lengthMm: number, widthMm: number, heightMm: number, cartons: number): string {
@@ -45,43 +46,51 @@ export class PartsService {
   }
 
   async create(dto: CreatePartDto): Promise<Part> {
-    const existingCount = await this.parts.count();
-    const cbm = computeCbm(
-      dto.cartonLengthMm,
-      dto.cartonWidthMm,
-      dto.cartonHeightMm,
-      dto.cartonCount,
-    );
-    const part = await this.parts.save(
-      this.parts.create({
-        orderId: dto.orderId,
-        partName: dto.partName,
-        productCode: dto.productCode ?? null,
-        divisionId: dto.divisionId,
-        dcPrefixId: dto.dcPrefixId,
-        masterPo: dto.masterPo,
-        quantityPcs: dto.quantityPcs,
-        totalWeightKg: dto.totalWeightKg.toString(),
-        cartonCount: dto.cartonCount,
-        cartonLengthMm: dto.cartonLengthMm,
-        cartonWidthMm: dto.cartonWidthMm,
-        cartonHeightMm: dto.cartonHeightMm,
-        cbm,
-        containerId: null,
-        preferredRackSlot: null,
-        colorHex: dto.colorHex ?? nextPartColor(existingCount),
-        lotNumber: dto.lotNumber || null,
-        storageClass: dto.storageClass || suggestStorageClass(dto.partName),
-        uomCode: dto.uomCode || 'EA',
-        unitCost: dto.unitCost !== undefined && dto.unitCost !== null ? dto.unitCost.toString() : null,
-        expirationDate: dto.expirationDate || null,
-        supplierName: dto.supplierName || null,
-        supplierId: dto.supplierId ?? null,
-        supplierSiteCode: dto.supplierSiteCode || null,
-      }),
-    );
-    await this.history.log(HistoryEventType.PART_ADDED, `Thêm PART ${part.partName}`, {
-      partId: part.id,
+    if ((dto.uomCode || 'EA') === 'EA' && dto.quantityPcs < dto.cartonCount) {
+      throw new BadRequestException({code:'QTY_CARTONS_MISMATCH',message:'Số cái (PCS) không được ít hơn số thùng. Vui lòng kiểm tra số lượng trước khi lưu.'});
+    }
+    // Atomic: do not create an orphan PART if the requested rack is invalid or full.
+    const part = await this.dataSource.transaction(async (em) => {
+      let rack: Container | null = null;
+      let chosenSlot: number | null = null;
+      if (dto.rackId) {
+        await em.query('SELECT id FROM containers WHERE id = $1 FOR UPDATE', [dto.rackId]);
+        rack = await em.findOne(Container, { where: { id: dto.rackId } });
+        if (!rack) throw new NotFoundException({ code: 'RACK_NOT_FOUND', message: 'Không tìm thấy kệ nhận hàng' });
+        const peers = await em.find(Part, { where: { containerId: rack.id } });
+        const zone = await em.findOne(WarehouseZone, { where: { warehouseCode: rack.warehouseCode, code: rack.zoneCode } });
+        const storageClass = dto.storageClass || suggestStorageClass(dto.partName);
+        assertExpiryDeclared(storageClass, dto.expirationDate);
+        assertStoragePlacement({ productClass: storageClass, zoneMode: zone?.storageMode, rackClasses: peers.map((p) => p.storageClass), productName: dto.partName, rackName: rack.name });
+        assertRackProductFamily({ rackFamily: rack.productFamily, peers, productName: dto.partName, productClass: storageClass, rackName: rack.name });
+        const occupied = new Set(peers.filter((p) => p.preferredRackSlot !== null).map((p) => p.preferredRackSlot));
+        chosenSlot = dto.slotIndex ?? preferredSlotsByExpiry(dto.expirationDate).find((i) => !occupied.has(i)) ?? null;
+        if (chosenSlot === null || occupied.has(chosenSlot)) throw new BadRequestException({ code: 'RACK_FULL', message: `Kệ ${rack.name} không có ô trống phù hợp` });
+        const cbm = computeCbm(dto.cartonLengthMm, dto.cartonWidthMm, dto.cartonHeightMm, dto.cartonCount);
+        assertCapacity({ rackName: rack.name, partName: dto.partName, limits: rackLimits(rack), others: peers.map((p) => ({ weightKg: Number(p.totalWeightKg), cbm: Number(p.cbm), slot: p.preferredRackSlot })), before: null, after: { weightKg: dto.totalWeightKg, cbm: Number(cbm), slot: chosenSlot } });
+      }
+      const count = await em.count(Part);
+      const cbm = computeCbm(dto.cartonLengthMm, dto.cartonWidthMm, dto.cartonHeightMm, dto.cartonCount);
+      const saved = await em.save(Part, em.create(Part, {
+        orderId: dto.orderId, partName: dto.partName, productCode: dto.productCode ?? null,
+        divisionId: dto.divisionId, dcPrefixId: dto.dcPrefixId, masterPo: dto.masterPo,
+        quantityPcs: dto.quantityPcs, totalWeightKg: dto.totalWeightKg.toString(), cartonCount: dto.cartonCount,
+        cartonLengthMm: dto.cartonLengthMm, cartonWidthMm: dto.cartonWidthMm, cartonHeightMm: dto.cartonHeightMm,
+        cbm, containerId: rack?.id || null, preferredRackSlot: chosenSlot,
+        colorHex: dto.colorHex ?? nextPartColor(count), lotNumber: dto.lotNumber || null,
+        storageClass: dto.storageClass || suggestStorageClass(dto.partName), uomCode: dto.uomCode || 'EA',
+        unitCost: dto.unitCost === undefined || dto.unitCost === null ? null : dto.unitCost.toString(),
+        expirationDate: dto.expirationDate || null, supplierName: dto.supplierName || null,
+        supplierId: dto.supplierId ?? null, supplierSiteCode: dto.supplierSiteCode || null,
+      }));
+      await em.save(HistoryEvent, em.create(HistoryEvent, {
+        type: HistoryEventType.PART_ADDED,
+        description: `Thêm PART ${saved.partName}`,
+        details: { partId: saved.id, rackId: saved.containerId, slotIndex: saved.preferredRackSlot },
+        orderId: saved.orderId,
+        timestamp: new Date(),
+      }));
+      return saved;
     });
     return this.findOne(part.id);
   }
@@ -91,8 +100,9 @@ export class PartsService {
     const previousLoad = { weightKg: Number(part.totalWeightKg), cbm: Number(part.cbm), slot: part.preferredRackSlot };
     const previousStorageClass = part.storageClass;
     const previousName = part.partName;
+    const { rackId: _rackId, slotIndex: _slotIndex, ...editable } = dto;
     Object.assign(part, {
-      ...dto,
+      ...editable,
       storageClass: dto.storageClass || part.storageClass,
       totalWeightKg:
         dto.totalWeightKg !== undefined ? dto.totalWeightKg.toString() : part.totalWeightKg,
@@ -114,6 +124,7 @@ export class PartsService {
         const peers = await this.parts.find({ where: { containerId: rack.id, id: Not(part.id) } });
         assertExpiryDeclared(part.storageClass, part.expirationDate);
         assertStoragePlacement({ productClass: part.storageClass, zoneMode: zone?.storageMode, rackClasses: peers.map((p) => p.storageClass), productName: part.partName, rackName: rack.name });
+        assertRackProductFamily({ rackFamily: rack.productFamily, peers, productName: part.partName, productClass: part.storageClass, rackName: rack.name });
         assertCapacity({ rackName: rack.name, partName: part.partName, limits: rackLimits(rack), others: peers.map((p) => ({ weightKg: Number(p.totalWeightKg), cbm: Number(p.cbm), slot: p.preferredRackSlot })), before: previousLoad, after: { weightKg: Number(part.totalWeightKg), cbm: Number(part.cbm), slot: part.preferredRackSlot } });
       }
     }
@@ -149,6 +160,7 @@ export class PartsService {
         const zone = await em.findOne(WarehouseZone, { where: { warehouseCode: toRack.warehouseCode, code: toRack.zoneCode } });
         assertExpiryDeclared(part.storageClass, part.expirationDate);
         assertStoragePlacement({ productClass: part.storageClass, zoneMode: zone?.storageMode, rackClasses: peers.map((p) => p.storageClass), productName: part.partName, rackName: toRack.name });
+        assertRackProductFamily({ rackFamily: toRack.productFamily, peers, productName: part.partName, productClass: part.storageClass, rackName: toRack.name });
         const occupied = new Set(peers.filter((p) => p.preferredRackSlot !== null).map((p) => p.preferredRackSlot));
         if (dto.slotIndex !== null && dto.slotIndex !== undefined) {
           if (occupied.has(dto.slotIndex)) throw new BadRequestException({ code: 'RACK_SLOT_OCCUPIED', message: 'Ô kệ này đang có PART khác' });

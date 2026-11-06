@@ -40,6 +40,7 @@ function toRacks(rawRacks) {
     name: r.name,
     warehouseCode: r.warehouseCode || 'DENSO-WH',
     zoneCode: r.zoneCode || 'ZONE-A',
+    productFamily: r.productFamily || null,
     type: r.rackType?.code,
     rackTypeId: r.rackType?.id,
     maxCbm: Number(r.maxCbmOverride ?? r.rackType?.maxCbm ?? 0),
@@ -99,7 +100,6 @@ export function StoreProvider({ children }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      // If we don't have cached data yet, show skeleton loader; if we do, show cache and sync quietly
       if (!getSessionCache('ms_orders')) {
         setIsLoading(true);
       }
@@ -158,6 +158,7 @@ export function StoreProvider({ children }) {
     const { divisionId, dcPrefixId } = resolveDivisionAndPrefix(data.divisionCode, data.dcPrefix);
     return {
       orderId: data.orderId,
+      rackId: data.rackId || undefined,
       partName: data.partName,
       productCode: data.productCode || undefined,
       divisionId,
@@ -183,6 +184,7 @@ export function StoreProvider({ children }) {
   const addPart = useCallback(async (data) => {
     const created = await api.parts.create(toCreatePartBody(data));
     await Promise.all([refetchParts(), refetchHistory()]);
+    try { window.dispatchEvent(new CustomEvent('wms-inventory-committed', { detail: { rackIds: [data.rackId].filter(Boolean) } })); } catch { /* SSR */ }
     return created;
   }, [divisions, refetchParts, refetchHistory]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -255,6 +257,7 @@ export function StoreProvider({ children }) {
       rackTypeId: data.rackTypeId,
       warehouseCode: data.warehouseCode,
       zoneCode: data.zoneCode,
+      productFamily: data.productFamily,
       maxCbmOverride: data.maxCbm,
       maxPayloadKgOverride: data.maxWeight,
     });

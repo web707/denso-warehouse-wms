@@ -32,6 +32,10 @@ export class Container extends BaseEntity {
   @Column({ name: 'zone_code', default: 'ZONE-A' })
   zoneCode: string;
 
+  // Optional permanent product family for this physical rack; null = first product family locks placement dynamically.
+  @Column({ name: 'product_family', type: 'varchar', length: 40, nullable: true })
+  productFamily: string | null;
+
   // Overrides ContainerType defaults when set (e.g. a de-rated payload).
   @Column({ name: 'max_cbm_override', type: 'numeric', precision: 8, scale: 3, nullable: true })
   maxCbmOverride: string | null;

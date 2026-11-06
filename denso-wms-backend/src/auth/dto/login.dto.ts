@@ -1,13 +1,13 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsString, MinLength } from 'class-validator';
 
 export class LoginDto {
-  @ApiProperty({ example: 'admin', description: 'Tên tài khoản hoặc email', required: false })
+  @ApiPropertyOptional({ example: 'admin', description: 'Tên tài khoản hoặc email' })
   @IsOptional()
   @IsString()
   username?: string;
 
-  @ApiProperty({ example: 'admin@masan.local', description: 'Email đăng nhập', required: false })
+  @ApiPropertyOptional({ example: 'admin@masanconsumer.com', description: 'Email đăng nhập' })
   @IsOptional()
   @IsString()
   email?: string;

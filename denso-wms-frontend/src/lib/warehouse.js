@@ -78,11 +78,11 @@ export function compareRacks(a, b) {
  * (Quy tắc này trước đây lặp ở Racks, QR và Zones với kết quả hơi khác nhau.)
  */
 export function usedSlotCount(rackParts) {
-  const explicit = new Set(
-    rackParts.filter((p) => Number.isInteger(p.preferredRackSlot)).map((p) => p.preferredRackSlot),
-  );
-  const n = explicit.size > 0 ? explicit.size : rackParts.length;
-  return Math.min(SLOTS_PER_RACK, n);
+  // Count only actual assigned S01–S20; never fabricate slots for old rows.
+  return new Set((rackParts || [])
+    .filter((p) => (Number(p.quantity || 0) > 0 || Number(p.cartons || 0) > 0)
+      && Number.isInteger(p.preferredRackSlot) && p.preferredRackSlot >= 0 && p.preferredRackSlot < SLOTS_PER_RACK)
+    .map((p) => p.preferredRackSlot)).size;
 }
 
 /* ---------- Trạng thái kệ ---------- */
@@ -103,7 +103,7 @@ export function rackWeightLimit(rack) {
 
 export function rackStatus({ usedSlots, totalWeight, totalCbm, weightLimit, maxCbm }) {
   if ((weightLimit > 0 && totalWeight > weightLimit) || (maxCbm > 0 && totalCbm > maxCbm)) return 'overload';
-  if (usedSlots === 0) return 'empty';
+  if (usedSlots === 0 && totalWeight <= 0 && totalCbm <= 0) return 'empty';
   // "Đầy" phải xét trước "gần đầy", nếu không kệ 20/20 ô sẽ luôn bị xếp vào "gần đầy"
   if ((weightLimit > 0 && totalWeight >= weightLimit) || usedSlots >= SLOTS_PER_RACK) return 'full';
   if ((weightLimit > 0 && totalWeight >= weightLimit * RACK_SAFETY.nearRatio) || usedSlots >= NEAR_FULL_SLOTS) return 'near';

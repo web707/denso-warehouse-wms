@@ -2,13 +2,7 @@ import { request, raw } from './client';
 
 export const api = {
   auth: {
-    login: (username, password) => {
-      const u = (username || '').trim();
-      const payload = u.includes('@')
-        ? { email: u, username: u, password }
-        : { username: u, email: u === 'admin' ? 'admin@masan.local' : (u + '@masan.local'), password };
-      return request('/auth/login', { method: 'POST', body: payload });
-    },
+    login: (username, password) => request('/auth/login', { method: 'POST', body: { username, password } }),
     me: () => request('/auth/me'),
     users: () => request('/auth/users'),
     createUser: (body) => request('/auth/users', { method: 'POST', body }),

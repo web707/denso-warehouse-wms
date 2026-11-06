@@ -5,11 +5,11 @@ import { ArrowRight, CheckCircle2, Play, RotateCcw, Truck } from 'lucide-react';
 
 // Illustrative workflow only: positions are not read from a real forklift/GPS/TMS.
 const STOPS = [
-  { name: 'Dock nhập', info: 'Tiếp nhận container', pos: [-5.4, 0, 2] },
-  { name: 'Staging', info: 'Dỡ pallet & đối chiếu', pos: [-3.0, 0, 0.4] },
-  { name: 'QC / Quét mã', info: 'Kiểm tra lô và HSD', pos: [-0.7, 0, -1.1] },
-  { name: 'Kệ lưu kho', info: 'Putaway đúng Zone, ô', pos: [2.3, 0, -1.0] },
-  { name: 'Dock xuất', info: 'FEFO / Pick & Pack', pos: [5.3, 0, 1.9] },
+  { name: 'Tiếp nhận', info: 'Dock nhập · xe vào bãi, dỡ pallet tại Staging và đối chiếu chứng từ', pos: [-5.4,0,2] },
+  { name: 'Kiểm định', info: 'QC · quét mã SKU, số lô, NSX/HSD, kiểm tra chất lượng', pos: [-2.65,0,0.4] },
+  { name: 'Lưu kho', info: 'Putaway · chọn đúng Zone, kệ và vị trí S01–S20 theo bảo quản', pos: [0,0,-1.1] },
+  { name: 'Soạn hàng', info: 'Pick & Pack · soạn đúng lô theo FEFO, xác nhận số lượng', pos: [2.7,0,-0.35] },
+  { name: 'Xuất kho', info: 'Kiểm đếm, niêm phong và bàn giao tại Dock xuất', pos: [5.45,0,1.9] },
 ];
 
 function MetalBox({ position, size, color = '#64748b' }) {
@@ -90,11 +90,26 @@ function ZoneMarker({ stop, i, active }) {
     <Html position={[0,2.8,0]} center distanceFactor={9} style={{pointerEvents:'none'}}>
       <div className={`whitespace-nowrap rounded-md border px-2 py-1 text-[11px] font-semibold shadow-sm ${active ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-white text-slate-700'}`}>{String(i+1).padStart(2,'0')} · {stop.name}</div>
     </Html>
-    {i === 0 && <TruckModel position={[0,0,-0.4]} />}
-    {i === 1 && <MetalBox position={[0,0.16,-0.6]} size={[1.4,0.3,0.75]} color="#d97706"/>}
-    {i === 2 && <group><MetalBox position={[0,0.45,-0.65]} size={[1.25,0.75,0.35]} color="#334155"/><MetalBox position={[0,0.88,-0.41]} size={[0.7,0.35,0.06]} color="#34d399"/></group>}
-    {i === 3 && <MiniRacking position={[0,0,-0.65]}/>}
-    {i === 4 && <TruckModel position={[0,0,-0.5]} color="#059669"/>}
+    {i === 0 && <group>
+      <TruckModel position={[-0.35,0,-0.45]}/>
+      {[0,1].map((n)=><MetalBox key={n} position={[0.6+n*.38,.14,-.85]} size={[.33,.28,.43]} color="#b45309"/>)}
+      <Text position={[0,.08,1]} color="#047857" fontSize={.14}>INBOUND / STAGING</Text>
+    </group>}
+    {i === 1 && <group>
+      <MetalBox position={[0,.45,-.65]} size={[1.2,.75,.36]} color="#334155"/>
+      <MetalBox position={[0,.89,-.42]} size={[.68,.35,.08]} color="#34d399"/>
+      <MetalBox position={[0,.2,.4]} size={[.72,.38,.6]} color="#d97706"/>
+      <Text position={[0,1.28,-.65]} color="#0f766e" fontSize={.15}>QC / SCAN</Text>
+    </group>}
+    {i === 2 && <MiniRacking position={[0,0,-.65]}/>}
+    {i === 3 && <group>
+      <MetalBox position={[0,.42,-.65]} size={[1.5,.14,.7]} color="#64748b"/>
+      {[-.48,0,.48].map((x,i)=><MetalBox key={i} position={[x,.63,-.65]} size={[.36,.35,.43]} color={["#0284c7","#10b981","#b45309"][i]}/>)}
+      <MetalBox position={[0,.13,-.65]} size={[1.6,.25,.72]} color="#334155"/>
+      <Text position={[0,1.05,-.65]} color="#0f766e" fontSize={.17}>FEFO · PICK & PACK</Text>
+    </group>}
+    {i === 4 && <group><TruckModel position={[0,0,-0.5]} color="#059669"/><Text position={[0,.12,1]} color="#047857" fontSize={.14}>OUTBOUND DOCK</Text></group>}
+
   </group>;
 }
 
@@ -108,7 +123,7 @@ export default function InboundJourney3D() {
     <div className="flex flex-wrap gap-3 items-center justify-between border-b border-slate-200 px-4 py-4 sm:px-6">
       <div>
         <h2 className="font-bold text-slate-900 text-lg flex gap-2 items-center"><Truck className="w-5 h-5 text-emerald-600"/> Luồng hàng 3D · Xe vào kho → Xuất hàng</h2>
-        <p className="text-sm text-slate-500 mt-1">Mô phỏng quy trình tham khảo Masan: tiếp nhận, kiểm tra, định vị kệ và soạn xuất.</p>
+        <p className="text-sm text-slate-500 mt-1">5 công đoạn thống nhất với dashboard: Tiếp nhận → Kiểm định → Lưu kho → Soạn hàng → Xuất kho.</p>
       </div>
       <div className="flex gap-2">
         <button type="button" onClick={() => (completed || (!playing && step === 0)) ? restart() : setPlaying((x)=>!x)} className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm flex gap-2 items-center">
@@ -124,6 +139,9 @@ export default function InboundJourney3D() {
         <directionalLight position={[5,10,5]} intensity={1.15} castShadow/>
         <mesh rotation={[-Math.PI/2,0,0]} receiveShadow position={[0,-0.04,0]}><planeGeometry args={[16,10]}/><meshStandardMaterial color="#f8fafc"/></mesh>
         <gridHelper args={[16,32,'#cbd5e1','#e2e8f0']} position={[0,-0.018,0]}/>
+        {/* Mark the material handling corridor; station dots follow the same flow as the storyboard. */}
+        {STOPS.slice(0,-1).map((stop,i)=>{const next=STOPS[i+1];const dx=next.pos[0]-stop.pos[0],dz=next.pos[2]-stop.pos[2];return <group key={`aisle-${i}`} position={[(stop.pos[0]+next.pos[0])/2,.007,(stop.pos[2]+next.pos[2])/2]} rotation={[0,Math.atan2(-dz,dx),0]}><mesh rotation={[-Math.PI/2,0,0]}><planeGeometry args={[Math.hypot(dx,dz),.45]}/><meshStandardMaterial color="#bae6fd" transparent opacity={.7}/></mesh></group>})}
+
         {STOPS.map((stop,i)=><ZoneMarker key={stop.name} stop={stop} i={i} active={step===i}/>) }
         <MovingPallet playing={playing} revision={revision} onStep={setStep} onFinish={() => {setCompleted(true);setPlaying(false);setStep(STOPS.length-1);}} />
         <OrbitControls makeDefault enableDamping minDistance={6} maxDistance={27} maxPolarAngle={Math.PI/2.08} target={[0,0.7,0]}/>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowRight, Eye, EyeOff, ShieldCheck, Warehouse, Package, Truck, Clock3, Sparkles } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
@@ -18,11 +18,6 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-
-  useEffect(() => {
-    // Pre-warm Render backend on mount so login executes in milliseconds
-    fetch('/api/health').catch(() => {});
-  }, []);
   if (signedIn) return <Navigate to="/" replace />;
   const submit = async (event) => {
     event.preventDefault();

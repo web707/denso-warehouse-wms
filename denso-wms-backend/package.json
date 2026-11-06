@@ -22,7 +22,8 @@
     "seed:transactions": "ts-node -r tsconfig-paths/register src/database/seeds/run-seed.ts --with-transactions",
     "db:create": "node scripts/db-create.js",
     "setup:admin": "ts-node -r tsconfig-paths/register src/database/seeds/setup-masan-admin.ts",
-    "seed:masan-demo": "ts-node -r tsconfig-paths/register src/database/seeds/seed-masan-fefo-demo.ts"
+    "seed:masan-demo": "ts-node -r tsconfig-paths/register src/database/seeds/seed-masan-fefo-demo.ts",
+    "seed:masan-three-racks": "ts-node -r tsconfig-paths/register src/database/seeds/seed-masan-three-racks.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.11",
