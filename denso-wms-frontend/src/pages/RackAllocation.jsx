@@ -364,33 +364,69 @@ function RackVisual({ stats, maxCbm }) {
   const parts = stats.parts;
   if (parts.length === 0) {
     return (
-      <div className="h-16 rounded-lg border-2 border-dashed border-slate-200 flex items-center justify-center text-xs text-slate-300">
-        Trống
+      <div className="h-10 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-700/60 flex items-center justify-center text-xs text-slate-400 dark:text-slate-500 bg-slate-50/50 dark:bg-slate-800/40">
+        Kệ đang trống (0% CBM)
       </div>
     );
   }
 
+  const usedPct = Math.min((stats.totalCbm / maxCbm) * 100, 100);
+  const remainingPct = Math.max(0, 100 - usedPct);
+
   return (
-    <div className="relative h-16 rounded-lg border border-slate-200 overflow-hidden flex bg-slate-50">
-      {parts.map((p) => {
-        const cbm = calcPartCbm(p);
-        const pct = Math.min((cbm / maxCbm) * 100, 100);
-        return (
+    <div className="space-y-1.5">
+      <div className="relative h-10 rounded-lg border border-slate-200 dark:border-slate-700/70 overflow-hidden flex bg-slate-100 dark:bg-slate-800/60 shadow-inner">
+        {parts.map((p) => {
+          const cbm = calcPartCbm(p);
+          const pct = Math.min((cbm / maxCbm) * 100, 100);
+          if (pct <= 0) return null;
+
+          return (
+            <div
+              key={p.id}
+              className="h-full flex items-center justify-center border-r border-black/10 dark:border-white/10 last:border-r-0 transition-all hover:brightness-110 hover:z-10 cursor-pointer overflow-hidden px-1.5"
+              style={{
+                width: `${pct}%`,
+                background: p.color,
+                minWidth: pct > 1 ? '16px' : '4px',
+              }}
+              title={`${p.partName}\nMã: ${p.productCode || 'N/A'}\nSố lượng: ${fmtNum(p.cartons)} thùng (${fmtNum(p.quantity)} PCS)\nThể tích: ${fmtDec(cbm, 3)} m³ (${fmtDec(pct, 1)}% kệ)\nKhối lượng: ${fmtKg(p.weight)}`}
+            >
+              {pct >= 18 ? (
+                <span className="truncate whitespace-nowrap text-[11px] font-semibold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)] select-none">
+                  {p.partName}
+                </span>
+              ) : pct >= 10 ? (
+                <span className="truncate whitespace-nowrap text-[10px] font-semibold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)] select-none">
+                  {p.productCode || `${Math.round(pct)}%`}
+                </span>
+              ) : null}
+            </div>
+          );
+        })}
+
+        {/* Phần dung lượng còn trống */}
+        {remainingPct > 5 && (
           <div
-            key={p.id}
-            className="h-full flex items-center justify-center text-[10px] font-semibold text-white overflow-hidden transition-all"
-            style={{ width: `${pct}%`, background: p.color, minWidth: pct > 0.5 ? 'auto' : '2px' }}
-            title={`${p.partName}: ${fmtDec(cbm, 2)} m³`}
+            className="h-full flex items-center justify-center text-[10px] font-medium text-slate-400 dark:text-slate-500 select-none overflow-hidden px-1"
+            style={{ width: `${remainingPct}%` }}
+            title={`Còn trống: ${fmtDec(maxCbm - stats.totalCbm, 2)} m³ (${fmtDec(remainingPct, 1)}%)`}
           >
-            {pct > 5 && p.partName}
+            {remainingPct >= 20 ? `Trống ${fmtDec(maxCbm - stats.totalCbm, 1)} m³` : ''}
           </div>
-        );
-      })}
-      {stats.totalCbm > maxCbm && (
-        <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-red-500 text-white text-[9px] font-bold">
-          VƯỢT {fmtDec(stats.totalCbm - maxCbm, 2)} m³
-        </div>
-      )}
+        )}
+
+        {stats.totalCbm > maxCbm && (
+          <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-red-600 text-white text-[9px] font-bold shadow-md animate-pulse">
+            VƯỢT {fmtDec(stats.totalCbm - maxCbm, 2)} m³
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between text-[11px] text-slate-400 dark:text-slate-500 px-0.5">
+        <span>Đã dùng: {fmtDec(stats.totalCbm, 2)} / {maxCbm} m³ ({fmtDec(stats.cbmPct, 1)}%)</span>
+        <span>{parts.length} loại PART</span>
+      </div>
     </div>
   );
 }
