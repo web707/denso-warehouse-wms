@@ -1,6 +1,8 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { CreateInspectionDto, QueryInspectionsDto, UpdateInspectionDto } from './dto/create-inspection.dto';
 import { InspectionsService } from './inspections.service';
 
@@ -28,18 +30,18 @@ export class InspectionsController {
   }
 
   @Post()
-  create(@Body() dto: CreateInspectionDto) {
-    return this.service.create(dto);
+  create(@Body() dto: CreateInspectionDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.create(dto, user);
   }
 
   @Patch(':id')
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateInspectionDto) {
-    return this.service.update(id, dto);
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateInspectionDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.update(id, dto, user);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    await this.service.remove(id);
+  async remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser): Promise<void> {
+    await this.service.remove(id, user);
   }
 }

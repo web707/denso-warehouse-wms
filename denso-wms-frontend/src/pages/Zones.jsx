@@ -11,6 +11,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { RACKS_PER_ZONE, WAREHOUSE_CODE, summarizeZone } from '@/lib/warehouse';
 import { STORAGE_MODES, modeLabel } from '@/lib/masanStorage';
 import { inspectZoneRacks } from '@/lib/zoneRackInventory';
+import { FAMILY_LABELS } from '@/lib/rackProductFamily';
 
 const TARGET_RACKS = RACKS_PER_ZONE;
 
@@ -22,6 +23,7 @@ export default function Zones() {
   const [code, setCode] = useState('ZONE-D');
   const [name, setName] = useState('Khu D');
   const [storageMode, setStorageMode] = useState('ambient');
+  const [productFamily, setProductFamily] = useState('');
   const [savingMode, setSavingMode] = useState(null);
   const [creating, setCreating] = useState(false);
   const [initializingCode, setInitializingCode] = useState(null);
@@ -53,12 +55,13 @@ export default function Zones() {
     if (!code.trim() || !name.trim()) return;
     setCreating(true);
     try {
-      const created = await api.zones.create({ warehouseCode: 'DENSO-WH', code: code.trim().toUpperCase(), name: name.trim(), storageMode });
+      const created = await api.zones.create({ warehouseCode: 'DENSO-WH', code: code.trim().toUpperCase(), name: name.trim(), storageMode, productFamily: productFamily || null });
       await load();
       toast({ title: 'Đã tạo Zone mới', description: `${created.code} được tạo độc lập và hiện chưa có kệ.` });
       setCode('ZONE-D');
       setName('Khu D');
       setStorageMode('ambient');
+      setProductFamily('');
     } catch (e) {
       toast({ variant: 'destructive', title: 'Không tạo được Zone', description: e.message });
     } finally {
@@ -75,6 +78,17 @@ export default function Zones() {
       toast({ title: `Đã cập nhật khu ${zone.code}`, description: modeLabel(newMode) });
     } catch (error) {
       toast({ variant: 'destructive', title: 'Không thể đổi kiểu kho', description: error.message });
+    } finally { setSavingMode(null); }
+  };
+
+  const changeProductFamily = async (zone, value) => {
+    setSavingMode(zone.id);
+    try {
+      await api.zones.update(zone.id, { productFamily: value || null });
+      await load();
+      toast({ title: 'Đã cập nhật nhóm hàng của Zone' });
+    } catch (error) {
+      toast({ variant: 'destructive', title: 'Không thể đổi nhóm hàng', description: error.message });
     } finally { setSavingMode(null); }
   };
 
@@ -135,6 +149,10 @@ export default function Zones() {
               </div>
 
               <label className="mt-4 block text-xs font-semibold text-slate-600">Điều kiện bảo quản của Zone
+                <select aria-label={`Nhóm hàng ${zone.code}`} className="mt-1 h-9 w-full rounded-lg border bg-white px-2 text-slate-900" value={zone.productFamily || ''} disabled={savingMode===zone.id} onChange={(e)=>changeProductFamily(zone,e.target.value)}>
+                  <option value="">Mọi nhóm phù hợp</option>
+                  {Object.entries(FAMILY_LABELS).map(([value,label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
                 <select aria-label={`Loại kho ${zone.code}`} className="mt-1 h-9 w-full rounded-lg border bg-white px-2 text-slate-900" value={zone.storageMode || 'ambient'} disabled={savingMode===zone.id || zoneParts.some((p)=>Number(p.cartons)>0)} onChange={(e)=>changeStorageMode(zone,e.target.value)}>
                   {STORAGE_MODES.map((mode)=><option key={mode.value} value={mode.value}>{mode.label}</option>)}
                 </select>
@@ -177,6 +195,10 @@ export default function Zones() {
         <div className="flex flex-wrap gap-2">
           <Input className="max-w-40" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="ZONE-D" />
           <Input className="max-w-64" value={name} onChange={(e) => setName(e.target.value)} placeholder="Khu D" />
+          <select aria-label="Nhóm hàng zone mới" className="h-10 rounded-lg border bg-white px-3 text-sm" value={productFamily} onChange={(e)=>setProductFamily(e.target.value)}>
+            <option value="">Mọi nhóm phù hợp</option>
+            {Object.entries(FAMILY_LABELS).map(([value,label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
           <select aria-label="Điều kiện bảo quản zone mới" className="h-10 rounded-lg border bg-white px-3 text-sm text-slate-900" value={storageMode} onChange={(e)=>setStorageMode(e.target.value)}>
             {STORAGE_MODES.map((mode)=><option key={mode.value} value={mode.value}>{mode.label}</option>)}
           </select>

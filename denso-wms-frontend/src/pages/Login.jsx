@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowRight, Eye, EyeOff, ShieldCheck, Warehouse, Package, Truck, Clock3, Sparkles } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, ShieldCheck, Warehouse, Package, Truck, Clock3, Sparkles, Loader2 } from 'lucide-react';
+import { isDemoMode } from '@/lib/environment';
 import { useAuth } from '@/lib/auth';
 
 const FEATURES = [
@@ -18,6 +19,14 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+
+  // Pre-warm backend and DNS while user is on the login page
+  useEffect(() => {
+    try {
+      const apiBase = isDemoMode ? '/api' : (import.meta.env.VITE_API_BASE_URL || '/api');
+      fetch(`${apiBase}/health`, { method: 'GET', keepalive: true }).catch(() => {});
+    } catch {}
+  }, []);
   if (signedIn) return <Navigate to="/" replace />;
   const submit = async (event) => {
     event.preventDefault();
@@ -53,6 +62,7 @@ export default function Login() {
       </div>
       <div className="flex-1 min-h-[500px] flex items-center justify-center p-6 sm:p-10 lg:p-14">
         <div className="w-full max-w-[410px]">
+          {isDemoMode && <p className="mb-4 rounded-lg border border-amber-500/40 bg-amber-50 p-3 text-sm text-amber-700"><strong>DEMO / QA</strong> · Dữ liệu kiểm thử độc lập.</p>}
           <div className="mb-9"><div className="text-xs font-bold tracking-[.2em] uppercase text-[#168161] mb-3">Quản trị kho</div><h2 className="text-3xl font-extrabold tracking-tight text-slate-900">Đăng nhập hệ thống</h2><p className="text-sm text-slate-500 mt-3">Sử dụng tài khoản đã được cấp quyền để tiếp tục.</p></div>
           <form onSubmit={submit} className="space-y-5">
             <label className="block text-sm font-semibold text-slate-700">Tên đăng nhập
@@ -64,7 +74,7 @@ export default function Login() {
               </span>
             </label>
             {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-            <button disabled={busy} type="submit" className="w-full rounded-xl h-12 bg-[#08754f] hover:bg-[#075f42] disabled:opacity-70 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-800/10 transition">{busy ? 'Đang xác thực...' : <>Đăng nhập <ArrowRight className="h-4 w-4" /></>}</button>
+            <button disabled={busy} type="submit" className="w-full rounded-xl h-12 bg-[#08754f] hover:bg-[#075f42] disabled:opacity-70 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-800/10 transition">{busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Đang đăng nhập...</> : <>Đăng nhập <ArrowRight className="h-4 w-4" /></>}</button>
           </form>
           <div className="mt-9 flex items-center justify-center gap-2 text-xs text-slate-400"><ShieldCheck className="h-4 w-4 text-emerald-600" /> Phiên đăng nhập được bảo vệ bằng xác thực bảo mật</div>
         </div>

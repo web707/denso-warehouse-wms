@@ -8,12 +8,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { MASAN_CATEGORIES } from '@/lib/masanCatalog';
 import { STORAGE_CLASSES, suggestMasanStorageClass } from '@/lib/masanStorage';
-import { getFamily, familyLabel, rackFamily } from '@/lib/rackProductFamily';
+import { FAMILY_LABELS, familyLabel, rackFamily } from '@/lib/rackProductFamily';
 
 const empty = {
   orderId: '',
   partName: '',
   productCode: '',
+  productFamily: '',
   masterPo: '',
   dcPrefix: '',
   poNumber: '',
@@ -96,7 +97,7 @@ export default function PartDialog({ open, onOpenChange, part, defaultOrderId, s
   };
   const chosenDivision = divisions.find((d) => d.code === form.divisionCode);
   const availablePrefixes = chosenDivision?.dcPrefixes || [];
-  const requestedFamily = getFamily({ partName: form.partName, storageClass: form.storageClass });
+  const requestedFamily = form.productFamily || parts.find((p) => p.productCode === form.productCode.trim() && p.productFamily)?.productFamily;
   const compatibleRacks = racks.filter((rack) => {
     const group = rackFamily(rack, parts);
     return rack.id === part?.rackId || !requestedFamily || !group || group === requestedFamily;
@@ -124,6 +125,7 @@ export default function PartDialog({ open, onOpenChange, part, defaultOrderId, s
       orderId: form.orderId,
       partName: form.partName,
       productCode: form.productCode,
+      productFamily: requestedFamily,
       masterPo: form.masterPo,
       dcPrefix: form.dcPrefix,
       poNumber: form.poNumber,
@@ -203,12 +205,19 @@ export default function PartDialog({ open, onOpenChange, part, defaultOrderId, s
             </div>
             <div className="space-y-1.5">
               <Label>Tên sản phẩm / PART</Label>
-              <Input className={invalidClass('partName')} value={form.partName} onChange={(e) => setForm((f) => ({ ...f, partName: e.target.value, storageClass: suggestMasanStorageClass(e.target.value) }))} placeholder="VD: Kokomi Đại 90g" required />{err('partName')}
+              <Input className={invalidClass('partName')} value={form.partName} onChange={(e) => setForm((f) => ({ ...f, partName: e.target.value }))} placeholder="VD: Kokomi Đại 90g" required />{err('partName')}
             </div>
             <div className="space-y-1.5">
               <Label>Mã SKU nội bộ (ItemNumber)</Label>
               <Input value={form.productCode} onChange={(e) => set('productCode', e.target.value)} placeholder="Mã thực tế theo hệ thống" />
             </div>
+            <label className="space-y-1 text-sm">
+              <span>Nhóm hàng của SKU</span>
+              <select className="h-10 w-full rounded-md border bg-white px-2" value={requestedFamily || ''} onChange={(e) => set('productFamily', e.target.value)}>
+                <option value="">Chưa xác nhận</option>
+                {Object.entries(FAMILY_LABELS).map(([value,label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </label>
             <div className="space-y-1.5">
               <Label>Master PO</Label>
               <Input className={invalidClass('masterPo')} value={form.masterPo} onChange={(e) => set('masterPo', e.target.value)} placeholder="M91846" />{err('masterPo')}

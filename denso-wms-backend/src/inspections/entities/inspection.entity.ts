@@ -3,7 +3,7 @@ import { BaseEntity } from '../../common/entities/base.entity';
 import { numericTransformer } from '../../common/transformers/numeric.transformer';
 
 export const INSPECTION_TYPES = ['INCOMING', 'IN-PROCESS', 'FINAL'] as const;
-export const JUDGMENTS = ['OK', 'NG', 'HOLD'] as const;
+export const JUDGMENTS = ['OK', 'NG', 'HOLD', 'AVAILABLE', 'BLOCKED', 'EXPIRED', 'REJECTED'] as const;
 export type Judgment = (typeof JUDGMENTS)[number];
 
 const measure = { type: 'numeric' as const, precision: 14, scale: 4, nullable: true, transformer: numericTransformer };
@@ -21,6 +21,12 @@ export class Inspection extends BaseEntity {
   @Index()
   @Column({ name: 'lot_number' })
   lotNumber: string;
+
+  @Column({ name: 'lot_id', type: 'uuid', nullable: true })
+  lotId: string | null;
+
+  @Column({ name: 'quality_scope_id', type: 'uuid', nullable: true })
+  qualityScopeId: string | null;
 
   @Index()
   @Column({ name: 'work_order_number', type: 'varchar', nullable: true })

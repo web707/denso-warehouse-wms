@@ -14,7 +14,6 @@ import { Container } from '../../containers/entities/container.entity';
 import { ContainerType } from '../../container-types/entities/container-type.entity';
 import { WarehouseZone } from '../../warehouse-zones/entities/warehouse-zone.entity';
 import { nextPartColor } from '../../parts/constants/part-colors';
-import { classifyRackFamily } from '../../inventory/rack-product-family.rules';
 
 loadEnv();
 const DEMO_ZONE = 'ZONE-TEST-3R';
@@ -65,14 +64,14 @@ async function main() {
         if(rack && rack.productFamily && rack.productFamily !== group.family) throw new Error(`${group.rack} already assigned to another product family; refuse to overwrite`);
         if(!rack) rack=await racks.save(racks.create({orderId:order.id,name:group.rack,warehouseCode:WAREHOUSE_CODE,zoneCode:DEMO_ZONE,productFamily:group.family,containerTypeId:rackType.id,maxCbmOverride:'17.550',maxPayloadKgOverride:'2000'}));
         const current=await parts.find({where:{containerId:rack.id}});
-        if(current.some(p=>classifyRackFamily(p.partName,p.storageClass)!==group.family)) throw new Error(`${group.rack} has old/mixed product groups: refuse to rewrite stock`);
+        if(current.some(p=>p.productFamily!==group.family)) throw new Error(`${group.rack} has old/mixed product groups: refuse to rewrite stock`);
         const occupied=new Map(current.filter((part)=>part.preferredRackSlot!==null).map((part)=>[part.preferredRackSlot,part]));
         for(let i=0;i<20;i++){
           const productCode=`MASAN-TEST-3R-${group.rack}-${String(i+1).padStart(2,'0')}`;
           const lotNumber=`TEST-3R-${group.rack}-${String(i+1).padStart(2,'0')}`;
           const existing=await parts.findOne({where:{productCode,lotNumber}});
           if(existing){
-            if(classifyRackFamily(existing.partName, existing.storageClass)!==group.family) throw new Error(`Old demo layout found (${group.rack}): seed will not overwrite old inventory. Use a fresh TEST database or manually migrate old demo racks.`);
+            if(existing.productFamily!==group.family) throw new Error(`Old demo layout found (${group.rack}): seed will not overwrite old inventory. Use a fresh TEST database or manually migrate old demo racks.`);
             if(existing.containerId!==rack.id || existing.preferredRackSlot!==i || existing.orderId!==order.id) throw new Error(`Existing demo product moved: ${productCode}; refuse to overwrite`);
             skipped++;continue;
           }
@@ -82,7 +81,7 @@ async function main() {
           // Deterministic fictional HSD; multiple lots allow FEFO sorting.
           const month=String(1+(i%12)).padStart(2,'0'); const year=i<12?2027:2028;
           const createdPart = await parts.save(parts.create({
-            orderId:order.id,partName:name,productCode,divisionId:division.id,dcPrefixId:dc.id,
+            orderId:order.id,partName:name,productCode,productFamily:group.family,divisionId:division.id,dcPrefixId:dc.id,
             masterPo:`MASAN-3R-PO-${group.rack}`,quantityPcs,totalWeightKg:totalWeightKg.toFixed(2),cartonCount,
             cartonLengthMm:350,cartonWidthMm:260,cartonHeightMm:230,cbm:(.35*.26*.23*cartonCount).toFixed(6),
             containerId:rack.id,preferredRackSlot:i,colorHex:nextPartColor(i+created),

@@ -80,6 +80,9 @@ export class ContainersService {
       }
       if (dto.productFamily) {
         const zone = await em.findOne(WarehouseZone, { where:{ warehouseCode, code:zoneCode } });
+        if (zone?.productFamily && zone.productFamily !== dto.productFamily) {
+          throw new BadRequestException({ code: 'ZONE_PRODUCT_FAMILY_MISMATCH', message: 'Nhóm hàng của kệ không phù hợp Zone' });
+        }
         if (rackFamilyStorageMode(dto.productFamily) !== (zone?.storageMode || 'ambient')) throw new BadRequestException({ code:'RACK_FAMILY_ZONE_MISMATCH', message:'Chủ đề kệ không phù hợp với điều kiện bảo quản của Zone.' });
       }
       return em.save(Container, em.create(Container, {
@@ -115,6 +118,7 @@ export class ContainersService {
         const divider = key.indexOf('/');
         await this.lockZone(em, key.slice(0, divider), key.slice(divider + 1));
       }
+      await em.query('SELECT id FROM containers WHERE id = $1 FOR UPDATE', [id]);
       const container = await em.findOne(Container, { where: { id } });
       if (!container) throw new NotFoundException({ code: 'CONTAINER_NOT_FOUND', message: 'Không tìm thấy kệ kho' });
       if (moving || renaming) {
@@ -130,21 +134,20 @@ export class ContainersService {
       if (moving || dto.productFamily !== undefined) {
         const targetFamily = dto.productFamily === undefined ? container.productFamily : dto.productFamily;
         const targetZoneEntity = await em.findOne(WarehouseZone, { where: {warehouseCode: targetWarehouse, code: targetZone} });
+        if (targetFamily && targetZoneEntity?.productFamily && targetFamily !== targetZoneEntity.productFamily) {
+          throw new BadRequestException({ code: 'ZONE_PRODUCT_FAMILY_MISMATCH', message: 'Nhóm hàng của kệ không phù hợp Zone đích' });
+        }
         if (rackFamilyStorageMode(targetFamily) && rackFamilyStorageMode(targetFamily) !== (targetZoneEntity?.storageMode || 'ambient')) {
           throw new BadRequestException({ code:'RACK_FAMILY_ZONE_MISMATCH', message:'Chủ đề kệ không phù hợp Zone đích.' });
         }
         const stocked = await em.find(Part, { where: {containerId: id} });
         for (const p of stocked) {
-          assertStoragePlacement({productClass:p.storageClass, zoneMode:targetZoneEntity?.storageMode, rackClasses:stocked.filter(other=>other.id!==p.id).map(other=>other.storageClass), productName:p.partName, rackName:container.name});
+          const peers = stocked.filter(other => other.id !== p.id);
+          assertStoragePlacement({productClass:p.storageClass, zoneMode:targetZoneEntity?.storageMode, rackClasses:peers.map(other=>other.storageClass), productName:p.partName, rackName:container.name});
+          assertRackProductFamily({ rackFamily: targetFamily, peers, productName: p.partName, productFamily: p.productFamily,
+            zoneFamily: targetZoneEntity?.productFamily, rackName: container.name });
         }
-      }
-      if (dto.productFamily !== undefined) {
-        // A rack already containing products cannot be relabeled to a different family.
-        const occupants = await em.find(Part, { where: { containerId: id } });
-        for (const p of occupants) {
-          assertRackProductFamily({ rackFamily: dto.productFamily, peers: occupants.filter((other) => other.id !== p.id), productName: p.partName, productClass: p.storageClass, rackName: container.name });
-        }
-        container.productFamily = dto.productFamily || null;
+        container.productFamily = targetFamily || null;
       }
       if (dto.containerTypeId) container.containerTypeId = dto.containerTypeId;
       if (dto.orderId !== undefined) container.orderId = dto.orderId;

@@ -66,9 +66,15 @@ describe('planTransfer', () => {
   it('nhập đúng toàn bộ thì chấp nhận', () => {
     expect(planTransfer(stock, { qty: 756, cartons: 21, weight: 115.5 }).qty).toBe(756);
   });
-  it('từ chối chuyển một phần', () => {
-    expect(codeOf(() => planTransfer(stock, { qty: 10, cartons: 0, weight: 0 }))).toBe('TRANSFER_PARTIAL_UNSUPPORTED');
-    expect(codeOf(() => planTransfer(stock, { qty: 0, cartons: 0, weight: 50 }))).toBe('TRANSFER_PARTIAL_UNSUPPORTED');
+  it('hỗ trợ chuyển một phần và tính tỷ lệ thùng/khối lượng hợp lý', () => {
+    const partial = planTransfer({ quantityPcs: 100, cartonCount: 10, weightKg: 50 }, { qty: 35, cartons: 0, weight: 0 });
+    expect(partial).toEqual({ qty: 35, cartons: 3, weight: 17.5 });
+    const partialWeight = planTransfer(stock, { qty: 0, cartons: 0, weight: 50 });
+    expect(partialWeight.weight).toBe(50);
+  });
+  it('từ chối điều chuyển vượt tồn kho', () => {
+    expect(codeOf(() => planTransfer(stock, { qty: 900, cartons: 0, weight: 0 }))).toBe('TRANSFER_EXCEEDS_STOCK');
+    expect(codeOf(() => planTransfer(stock, { qty: 0, cartons: 30, weight: 0 }))).toBe('TRANSFER_EXCEEDS_STOCK');
   });
 });
 

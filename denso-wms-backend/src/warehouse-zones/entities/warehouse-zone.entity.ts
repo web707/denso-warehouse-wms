@@ -4,6 +4,9 @@ import { BaseEntity } from '../../common/entities/base.entity';
 @Entity('warehouse_zones')
 @Index(['warehouseCode', 'code'], { unique: true })
 export class WarehouseZone extends BaseEntity {
+  @Column({ name: 'product_family', type: 'varchar', length: 40, nullable: true })
+  productFamily: string | null;
+
   @Column({ name: 'warehouse_code' })
   warehouseCode: string;
 

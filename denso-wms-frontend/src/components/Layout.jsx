@@ -5,6 +5,7 @@ import {
   ArrowRightLeft, QrCode, MapPinned, BarChart3, Factory, ShieldCheck, Truck, GitBranch, Menu, PanelLeftClose, PanelLeftOpen,
   Sun, Moon, Monitor, LogOut, CalendarClock, UsersRound, Eye, BookOpen,
 } from 'lucide-react';
+import { isDemoMode } from '@/lib/environment';
 import { useStore } from '@/lib/store';
 import { useAuth } from '@/lib/auth';
 import { useTheme } from '@/lib/theme';
@@ -22,17 +23,21 @@ const navGroups = [
     label: 'Vận hành',
     items: [
       { to: '/', label: 'Tổng quan', icon: LayoutDashboard, end: true },
-      { to: '/inventory', label: 'Nhập · Xuất · Điều chuyển', short: 'Nhập · Xuất', icon: ArrowRightLeft },
+      { to: '/inventory', label: 'Giao dịch kho', short: 'Nhập · Xuất', icon: ArrowRightLeft },
+      { to: '/cycle-counts', label: 'Kiểm kê định kỳ', icon: ClipboardList },
+      { to: '/dispatch-orders', label: 'Đơn xuất kho', icon: Truck },
+      { to: '/documents', label: 'Chứng từ kho', icon: ClipboardList },
       { to: '/orders', label: 'Lô hàng · SKU', icon: Package },
-      { to: '/catalog', label: 'Danh mục sản phẩm Masan', short: 'Danh mục Masan', icon: BookOpen },
-      { to: '/fefo', label: 'Hàng cũ · mới (FEFO)', short: 'FEFO', icon: CalendarClock },
+      { to: '/catalog', label: 'Danh mục sản phẩm', short: 'Danh mục Masan', icon: BookOpen },
+      { to: '/fefo', label: 'Hạn dùng · FEFO', short: 'FEFO', icon: CalendarClock },
       { to: '/qr-labels', label: 'QR & Barcode kho', short: 'QR', icon: QrCode },
     ],
   },
   {
     label: 'Kho',
     items: [
-      { to: '/racks', label: 'Sơ đồ kho theo Zone', short: 'Sơ đồ kho', icon: Warehouse },
+      { to: '/racks', label: 'Trung tâm điều hành 3D', short: 'Điều hành 3D', icon: Warehouse },
+      { to: '/supply-chain-3d', label: 'Hành trình 3D', icon: GitBranch },
       { to: '/zones', label: 'Quản lý Zone', icon: MapPinned },
       { to: '/packing-rules', label: 'Quy ước lưu kho', icon: ClipboardList },
     ],
@@ -50,6 +55,7 @@ const navGroups = [
     label: 'Theo dõi',
     items: [
       { to: '/reports', label: 'Báo cáo kho', icon: BarChart3 },
+      { to: '/guide', label: 'Hướng dẫn nghiệp vụ', icon: BookOpen },
       { to: '/history', label: 'Lịch sử kho', icon: HistoryIcon },
       { to: '/users', label: 'Nhân sự & phân quyền', icon: UsersRound, adminOnly: true },
     ],
@@ -93,7 +99,7 @@ function SidebarBody({ collapsed = false, onNavigate, onToggleCollapse }) {
         </div>
         {!collapsed && (
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-white leading-tight truncate">MASAN CONSUMER WMS</p>
+            <p className="text-sm font-semibold text-white leading-tight">MASAN WMS</p>
             <p className="text-[11px] text-sidebar-foreground/70 truncate">Trung tâm phân phối FMCG</p>
           </div>
         )}
@@ -212,7 +218,7 @@ export default function Layout() {
         <aside
           className={cn(
             'hidden md:block fixed inset-y-0 left-0 z-30 border-r border-sidebar-border transition-[width] duration-200',
-            collapsed ? 'w-[72px]' : 'w-72',
+            collapsed ? 'w-[72px]' : 'w-60',
           )}
         >
           <SidebarBody collapsed={collapsed} onToggleCollapse={() => setCollapsed((v) => !v)} />
@@ -223,6 +229,7 @@ export default function Layout() {
             <Warehouse className="w-4 h-4 text-white" />
           </div>
           <p className="text-sm font-semibold truncate">{current?.label || 'MASAN CONSUMER WMS'}</p>
+          {isDemoMode && <span className="ml-auto shrink-0 rounded border border-amber-500/40 px-2 py-1 text-xs font-semibold text-amber-400">DEMO / QA</span>}
         </header>
 
         <nav
@@ -266,9 +273,13 @@ export default function Layout() {
         <main
           className={cn(
             'min-h-screen pt-14 pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pt-0 md:pb-0 transition-[margin] duration-200',
-            collapsed ? 'md:ml-[72px]' : 'md:ml-72',
+            collapsed ? 'md:ml-[72px]' : 'md:ml-60',
           )}
         >
+          <div className="sticky top-0 z-20 hidden h-12 items-center justify-between border-b border-border bg-card px-6 md:flex">
+            <span className="text-xs font-semibold text-muted-foreground">MASAN CONSUMER WMS <span className="px-2 opacity-50">/</span>{current?.label || 'Vận hành kho'}</span>
+            <span className="flex items-center gap-3 text-xs text-muted-foreground">{isDemoMode && <span className="rounded border border-amber-500/40 px-2 py-1 font-semibold text-amber-500">DEMO / QA</span>}{ROLE_LABELS[user?.role]}</span>
+          </div>
           {user?.role === 'warehouse_staff' && <div className="mx-4 mt-4 sm:mx-6 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900"><Eye className="w-4 h-4 shrink-0"/>Nhân viên kho: được xem hệ thống, ghi nhận nhập/xuất/điều chuyển và kiểm định. Quản lý danh mục và giao hàng cần quyền quản lý.</div>}
           {isReadOnly(user?.role) && <div className="mx-4 mt-4 sm:mx-6 flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800"><Eye className="w-4 h-4 shrink-0"/>Tài khoản {ROLE_LABELS[user?.role] || 'hiện tại'} có quyền xem; thao tác ghi dữ liệu bị giới hạn.</div>}
           <Outlet />

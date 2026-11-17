@@ -29,6 +29,7 @@ function toWarehousePart(p: Part) {
     orderId: p.orderId,
     partName: p.partName,
     productCode: p.productCode,
+    productFamily: p.productFamily,
     division: p.division,
     dcPrefix: p.dcPrefix,
     masterPo: p.masterPo,
@@ -43,6 +44,9 @@ function toWarehousePart(p: Part) {
     preferredRackSlot: p.preferredRackSlot,
     colorHex: p.colorHex,
     lotNumber: p.lotNumber,
+    lotId: p.lotId,
+    qualityScopeId: p.qualityScopeId,
+    receivingDamaged: p.receivingDamaged,
     storageClass: p.storageClass,
     uomCode: p.uomCode,
     unitCost: p.unitCost,
@@ -64,6 +68,11 @@ export class PartsController {
   async findAll(@Query() query: QueryPartsDto): Promise<any[]> {
     const rows = await this.service.findAll(query);
     return rows.map(toWarehousePart);
+  }
+
+  @Get('dashboard-summary')
+  dashboardSummary() {
+    return this.service.dashboardSummary();
   }
 
   @Get(':id')

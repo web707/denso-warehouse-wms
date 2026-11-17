@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { environmentKey } from '@/lib/environment';
 import { api } from '@/api';
 
 const StoreContext = createContext(null);
@@ -6,9 +8,11 @@ const StoreContext = createContext(null);
 function toParts(rawParts) {
   return rawParts.map((p) => ({
     id: p.id,
+    createdAt: p.createdAt,
     orderId: p.orderId,
     partName: p.partName,
     productCode: p.productCode || '',
+    productFamily: p.productFamily || '',
     masterPo: p.masterPo,
     dcPrefix: p.dcPrefix?.code || '',
     poNumber: '',
@@ -23,6 +27,9 @@ function toParts(rawParts) {
     preferredRackSlot: p.preferredRackSlot,
     color: p.colorHex,
     lotNumber: p.lotNumber || '',
+    lotId: p.lotId || null,
+    qualityScopeId: p.qualityScopeId || null,
+    receivingDamaged: !!p.receivingDamaged,
     storageClass: p.storageClass || 'unknown',
     uomCode: p.uomCode || 'EA',
     unitCost: p.unitCost === null || p.unitCost === undefined ? '' : Number(p.unitCost),
@@ -61,7 +68,7 @@ function toRules(rawRules) {
 
 function getSessionCache(key) {
   try {
-    const raw = sessionStorage.getItem(key);
+    const raw = sessionStorage.getItem(environmentKey(key));
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -70,30 +77,55 @@ function getSessionCache(key) {
 
 function setSessionCache(key, val) {
   try {
-    sessionStorage.setItem(key, JSON.stringify(val));
+    sessionStorage.setItem(environmentKey(key), JSON.stringify(val));
   } catch {}
 }
 
 export function StoreProvider({ children }) {
+  const queryClient = useQueryClient();
   const [orders, setOrders] = useState(() => getSessionCache('ms_orders') || []);
   const [parts, setParts] = useState(() => getSessionCache('ms_parts') || []);
+  const [partsStatus, setPartsStatus] = useState('loading');
+  const [racksStatus, setRacksStatus] = useState('loading');
   const [racks, setRacks] = useState(() => getSessionCache('ms_racks') || []);
   const [packingRules, setPackingRules] = useState(() => getSessionCache('ms_rules') || []);
   const [history, setHistory] = useState(() => getSessionCache('ms_hist') || []);
   const [divisions, setDivisions] = useState(() => getSessionCache('ms_divs') || []);
   const [rackTypes, setRackTypes] = useState(() => getSessionCache('ms_types') || []);
   const [isLoading, setIsLoading] = useState(() => !getSessionCache('ms_orders'));
-  const [currentOrderId, setCurrentOrderIdState] = useState(() => localStorage.getItem('currentOrderId') || null);
+  const [currentOrderId, setCurrentOrderIdState] = useState(() => localStorage.getItem(environmentKey('currentOrderId')) || null);
 
   const setCurrentOrderId = useCallback((id) => {
     setCurrentOrderIdState(id);
-    if (id) localStorage.setItem('currentOrderId', id);
-    else localStorage.removeItem('currentOrderId');
+    if (id) localStorage.setItem(environmentKey('currentOrderId'), id);
+    else localStorage.removeItem(environmentKey('currentOrderId'));
   }, []);
 
-  const refetchOrders = useCallback(() => api.orders.list().then((d) => { setOrders(d); setSessionCache('ms_orders', d); return d; }), []);
-  const refetchParts = useCallback(() => api.parts.list().then((d) => { const p = toParts(d); setParts(p); setSessionCache('ms_parts', p); return p; }), []);
-  const refetchRacks = useCallback(() => api.racks.list().then((d) => { const r = toRacks(d); setRacks(r); setSessionCache('ms_racks', r); return r; }), []);
+  const refetchOrders = useCallback(() => api.orders.list().then((d) => { setOrders(d); setSessionCache('ms_orders', d); return d; }).catch((err) => {
+    const cached = getSessionCache('ms_orders');
+    if (cached) { setOrders(cached); return cached; }
+    throw err;
+  }), []);
+  const refetchParts = useCallback(() => api.parts.list().then((d) => { const p = toParts(d); setParts(p); setSessionCache('ms_parts', p); setPartsStatus('ready'); return p; }).catch(error => {
+    const cached = getSessionCache('ms_parts');
+    if (cached && cached.length > 0) {
+      setParts(cached);
+      setPartsStatus('ready');
+      return cached;
+    }
+    setPartsStatus('error');
+    throw error;
+  }), []);
+  const refetchRacks = useCallback(() => api.racks.list().then((d) => { const r = toRacks(d); setRacks(r); setSessionCache('ms_racks', r); setRacksStatus('ready'); return r; }).catch(error => {
+    const cached = getSessionCache('ms_racks');
+    if (cached && cached.length > 0) {
+      setRacks(cached);
+      setRacksStatus('ready');
+      return cached;
+    }
+    setRacksStatus('error');
+    throw error;
+  }), []);
   const refetchRules = useCallback(() => api.packingRules.list().then((d) => { const r = toRules(d); setPackingRules(r); setSessionCache('ms_rules', r); return r; }), []);
   const refetchHistory = useCallback(() => api.history.list({ pageSize: 50 }).then((res) => { const h = res.items || []; setHistory(h); setSessionCache('ms_hist', h); return h; }), []);
 
@@ -161,6 +193,7 @@ export function StoreProvider({ children }) {
       rackId: data.rackId || undefined,
       partName: data.partName,
       productCode: data.productCode || undefined,
+      productFamily: data.productFamily || undefined,
       divisionId,
       dcPrefixId,
       masterPo: data.masterPo,
@@ -293,11 +326,22 @@ export function StoreProvider({ children }) {
   // Keep other open tabs consistent; event is fired only after the server commits.
   useEffect(() => {
     const onStorage = (event) => {
-      if (event.key === 'wms_inventory_committed') refetchParts().catch(console.error);
+      if (event.key === 'wms_inventory_committed') {
+        refetchParts().catch(console.error);
+        refreshMetrics();
+      }
+    };
+    const refreshMetrics = () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['rack-transfers'] });
     };
     window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, [refetchParts]);
+    window.addEventListener('wms-inventory-committed', refreshMetrics);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('wms-inventory-committed', refreshMetrics);
+    };
+  }, [queryClient, refetchParts]);
 
   const resetData = useCallback(async () => {
     await Promise.all([refetchOrders(), refetchParts(), refetchRacks(), refetchRules(), refetchHistory()]);
@@ -309,7 +353,7 @@ export function StoreProvider({ children }) {
     addOrder, updateOrder, renameOrder, deleteOrder,
     addPart, updatePart, deletePart, assignPart,
     createRackForOrder, initializeWarehouse, autoAssignRack, updateRack, deleteRack,
-    addRule, updateRule, deleteRule, logExport, resetData, applyInventorySnapshot, refetchParts,
+    addRule, updateRule, deleteRule, logExport, resetData, applyInventorySnapshot, refetchParts, refetchRacks, partsStatus, racksStatus,
   };
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

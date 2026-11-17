@@ -26,13 +26,14 @@ export class AuthController {
     return this.authService.register(dto.email, dto.password, dto.fullName);
   }
 
-  @Throttle({ default: { limit: 100, ttl: 60_000 } })
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('login')
   @HttpCode(HttpStatus.OK)
   login(@Body() dto: LoginDto): Promise<AuthResponseDto> {
     return this.authService.login(dto.username || dto.email || '', dto.password);
   }
 
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   refresh(@Body() dto: RefreshDto): Promise<AuthResponseDto> {
@@ -46,6 +47,7 @@ export class AuthController {
     return this.authService.me(user.id);
   }
 
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('forgot-password')
   @HttpCode(HttpStatus.ACCEPTED)
   async forgotPassword(@Body() dto: ForgotPasswordDto): Promise<{ message: string }> {
@@ -67,6 +69,7 @@ export class AuthController {
     return this.authService.updateManagedUser(id, dto, admin.id);
   }
 
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   async resetPassword(@Body() dto: ResetPasswordDto): Promise<{ message: string }> {

@@ -18,6 +18,7 @@ export enum HistoryEventType {
   IMPORT = 'import',
   EXPORT = 'export',
   SOLVE = 'solve',
+  INSPECTION_CHANGED = 'inspection_changed',
 }
 
 @Entity('history_events')

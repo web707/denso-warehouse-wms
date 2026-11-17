@@ -1,8 +1,13 @@
+import { environmentKey, isDemoMode } from '@/lib/environment';
 import { ApiError } from './errors';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
-const TOKEN_KEY = 'masan_access_token';
-const REFRESH_KEY = 'masan_refresh_token';
+const API_BASE = isDemoMode
+  ? '/api'
+  : (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')
+      ? '/api'
+      : (import.meta.env.VITE_API_BASE_URL || '/api'));
+const TOKEN_KEY = environmentKey('masan_access_token');
+const REFRESH_KEY = environmentKey('masan_refresh_token');
 let refreshPending = null;
 
 export function getAccessToken() { try { return sessionStorage.getItem(TOKEN_KEY); } catch { return null; } }
@@ -20,15 +25,14 @@ async function refreshAccessToken() {
     refreshPending = (async () => {
       const token = sessionStorage.getItem(REFRESH_KEY);
       if (!token) return false;
-      try {
-        const response = await fetch(`${API_BASE}/auth/refresh`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken: token }),
-        });
-        if (!response.ok) return false;
-        setAuthSession(await response.json());
-        return true;
-      } catch { return false; }
+      const response = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: token }),
+      });
+      if ([400, 401, 403].includes(response.status)) return false;
+      if (!response.ok) throw await ApiError.fromResponse(response);
+      setAuthSession(await response.json());
+      return true;
     })().finally(() => { refreshPending = null; });
   }
   return refreshPending;
@@ -45,8 +49,22 @@ async function requestRaw(path, opts = {}) {
     },
     body: body instanceof FormData ? body : body != null ? JSON.stringify(body) : undefined,
   });
-  let response = await send();
-  if (response.status === 401 && !path.startsWith('/auth/')) {
+  let response;
+  try {
+    response = await send();
+  } catch (err) {
+    if (method === 'GET') {
+      await new Promise((r) => setTimeout(r, 1200));
+      response = await send();
+    } else {
+      throw err;
+    }
+  }
+  if (method === 'GET' && [502, 503, 504].includes(response.status)) {
+    await new Promise((r) => setTimeout(r, 1500));
+    response = await send();
+  }
+  if (response.status === 401 && (path === '/auth/me' || !path.startsWith('/auth/'))) {
     if (await refreshAccessToken()) response = await send();
     if (response.status === 401) {
       clearAuthSession();

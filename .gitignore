@@ -1,13 +1,32 @@
+# Dependencies
 node_modules/
 **/node_modules/
 
+# Build artifacts
 dist/
 **/dist/
-
+dist-staging/
+**/dist-staging/
 .vite/
 **/.vite/
 
+# Environment configurations (Keep examples only)
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Logs and databases
 *.log
+*.dump
+var/
+**/var/
+
+# OS specific files
 .DS_Store
 Thumbs.db
+
+# Vercel / Cloud caches
 .vercel/

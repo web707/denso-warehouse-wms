@@ -23,7 +23,6 @@ import { useStore } from '@/lib/store';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { buildRackLayout } from '@/lib/viz/rackLayout';
 import { LOAD_STATUS_META, RACK_SAFETY, loadStatus } from '@/lib/viz/rackSafety';
 
 const WAREHOUSE_CODE = 'DENSO-WH';
@@ -51,11 +50,7 @@ const STATUS_LABEL = {
 
 const safeText = (value) => String(value || '').trim();
 
-function placementWeight(placement, partsById) {
-  const part = partsById[placement.partId];
-  if (!part?.cartons) return 0;
-  return Number(part.weight || 0) / Math.max(1, Number(part.cartons || 1));
-}
+
 
 function labelStatusClass(status) {
   return {
@@ -135,8 +130,6 @@ export default function QRLabels() {
   const [presetKey, setPresetKey] = useState('medium');
   const [selected, setSelected] = useState(new Set());
   const [previewKey, setPreviewKey] = useState('');
-  const [plan, setPlan] = useState(null);
-  const [loadingPlan, setLoadingPlan] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [printedCount, setPrintedCount] = useState(() => Number(localStorage.getItem('wms_qr_labels_printed') || 0));
 
@@ -159,31 +152,12 @@ export default function QRLabels() {
 
   const rack = useMemo(() => racks.find((r) => r.id === rackId) || null, [racks, rackId]);
   const rackParts = useMemo(() => parts.filter((p) => p.rackId === rackId), [parts, rackId]);
-  const partsById = useMemo(() => Object.fromEntries(parts.map((p) => [p.id, p])), [parts]);
-
-  useEffect(() => {
-    if (!rackId) { setPlan(null); return; }
-    let cancelled = false;
-    setLoadingPlan(true);
-    api.storage.plan(rackId)
-      .then((data) => { if (!cancelled) setPlan(data); })
-      .catch(() => { if (!cancelled) setPlan(null); })
-      .finally(() => { if (!cancelled) setLoadingPlan(false); });
-    return () => { cancelled = true; };
-  }, [rackId]);
-
-  const layout = useMemo(() => buildRackLayout(plan?.placements || []), [plan]);
-
   const slotItems = useMemo(() => Array.from({ length: SLOTS_PER_RACK }, (_, index) => {
     const code = slotCode(index);
-    const layoutSlot = layout.slots.find((s) => s.index === index);
-    const placementIds = [...new Set((layoutSlot?.placements || []).map((p) => p.partId))];
-    const fallbackParts = rackParts.filter((p) => p.preferredRackSlot === index);
-    const slotParts = placementIds.length ? placementIds.map((id) => partsById[id]).filter(Boolean) : fallbackParts;
-    const cartonCount = layoutSlot?.placements?.length || slotParts.reduce((s, p) => s + Number(p.cartons || 0), 0);
-    const weightKg = layoutSlot?.placements?.length
-      ? layoutSlot.placements.reduce((s, p) => s + placementWeight(p, partsById), 0)
-      : slotParts.reduce((s, p) => s + Number(p.weight || 0), 0);
+    const slotParts = rackParts.filter(p => p.preferredRackSlot === index
+      && (p.quantity > 0 || p.cartons > 0 || p.weight > 0));
+    const cartonCount = slotParts.reduce((sum, p) => sum + Number(p.cartons || 0), 0);
+    const weightKg = slotParts.reduce((sum, p) => sum + Number(p.weight || 0), 0);
     const load = loadStatus(weightKg, RACK_SAFETY.slotMaxKg);
     const firstPart = slotParts[0];
     const fullCode = `${zoneShort(rack?.zoneCode)}-${rack?.name || 'RACK'}-${code}`;
@@ -203,7 +177,7 @@ export default function QRLabels() {
       part: firstPart,
       detail: firstPart ? `${firstPart.partName} · ${firstPart.productCode || firstPart.masterPo} · ${cartonCount} thùng · ${weightKg.toLocaleString('vi-VN', { maximumFractionDigits: 1 })} kg` : 'Ô trống',
     };
-  }), [layout.slots, rackParts, partsById, rack, rackId, publicBase, zoneCode]);
+  }), [rackParts, rack, rackId, publicBase, zoneCode]);
 
   const rackItems = useMemo(() => zoneRacks.map((r) => {
     const sum = summarizeRack(r, parts);
@@ -304,7 +278,7 @@ export default function QRLabels() {
       <div className="flex gap-2 print:hidden"><Button variant="outline" onClick={handleExportPdf} disabled={exporting}>{exporting ? <Download className="w-4 h-4 mr-2 animate-pulse" /> : <FileDown className="w-4 h-4 mr-2" />}Xuất PDF</Button><Button onClick={handlePrint}><Printer className="w-4 h-4 mr-2" />In nhãn</Button></div>
     </div>
 
-    {localOnly && <div className="print:hidden rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800"><b>Lưu ý khi quét bằng điện thoại:</b> hiện QR đang dùng địa chỉ <code>{window.location.origin}</code>. Khi chạy nội bộ qua điện thoại, đặt <code>VITE_PUBLIC_APP_URL=http://IP-MAY-CHU:4310</code> hoặc dùng domain triển khai để điện thoại mở được liên kết.</div>}
+    {localOnly && <div className="print:hidden rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800"><b>Lưu ý khi quét bằng điện thoại:</b> nhãn từ phiên chạy cục bộ có thể không mở được trên điện thoại khác. Dùng địa chỉ WMS do quản trị viên cung cấp trước khi in nhãn cho kho.</div>}
 
     <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 print:hidden">
       <MiniStat icon={Warehouse} label="Kệ trong Zone" value={zoneRacks.length} sub={`${zoneCode} · tối đa 20 kệ`} />
@@ -324,7 +298,7 @@ export default function QRLabels() {
         <label className="text-xs text-slate-500">Khổ tem<select className="mt-1 w-full h-10 rounded-md border px-3 bg-white" value={presetKey} onChange={(e) => setPresetKey(e.target.value)}>{Object.entries(LABEL_PRESETS).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}</select></label>
         <div className="relative"><Search className="absolute left-3 top-1/2 translate-y-0.5 w-4 h-4 text-slate-400" /><Input className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="R12, S08, PART, Master PO..." /></div>
       </div>
-      <div className="flex items-center justify-between gap-3 flex-wrap text-xs"><div className="text-slate-500">{loadingPlan && type === 'slot' ? 'Đang tải trạng thái ô...' : `${filteredItems.length} nhãn phù hợp`}</div><div className="flex gap-2"><Button size="sm" variant="outline" onClick={selectAll}>Chọn tất cả</Button><Button size="sm" variant="ghost" onClick={clearSelected}>Bỏ chọn</Button></div></div>
+      <div className="flex items-center justify-between gap-3 flex-wrap text-xs"><div className="text-slate-500">{`${filteredItems.length} nhãn phù hợp`}</div><div className="flex gap-2"><Button size="sm" variant="outline" onClick={selectAll}>Chọn tất cả</Button><Button size="sm" variant="ghost" onClick={clearSelected}>Bỏ chọn</Button></div></div>
     </div>
 
     <div className="print:hidden grid xl:grid-cols-[1fr_360px] gap-5 items-start">

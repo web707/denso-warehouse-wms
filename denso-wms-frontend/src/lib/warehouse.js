@@ -80,7 +80,7 @@ export function compareRacks(a, b) {
 export function usedSlotCount(rackParts) {
   // Count only actual assigned S01–S20; never fabricate slots for old rows.
   return new Set((rackParts || [])
-    .filter((p) => (Number(p.quantity || 0) > 0 || Number(p.cartons || 0) > 0)
+    .filter((p) => (Number(p.quantity || 0) > 0 || Number(p.cartons || 0) > 0 || Number(p.weight || 0) > 0)
       && Number.isInteger(p.preferredRackSlot) && p.preferredRackSlot >= 0 && p.preferredRackSlot < SLOTS_PER_RACK)
     .map((p) => p.preferredRackSlot)).size;
 }

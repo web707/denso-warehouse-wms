@@ -87,9 +87,9 @@ export class ContainersController {
 
   @Post()
   async create(
+    @Body('rackTypeId', ParseUUIDPipe) rackTypeId: string,
     @Body()
     body: {
-      rackTypeId: string;
       orderId: string;
       name: string;
       warehouseCode?: string;
@@ -100,7 +100,7 @@ export class ContainersController {
     },
   ): Promise<any> {
     const dto: CreateContainerDto = {
-      containerTypeId: body.rackTypeId,
+      containerTypeId: rackTypeId,
       orderId: body.orderId,
       name: body.name,
       warehouseCode: body.warehouseCode,

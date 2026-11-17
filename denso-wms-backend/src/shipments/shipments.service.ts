@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, Repository } from 'typeorm';
+import { EntityManager, ILike, Repository } from 'typeorm';
+import { findLotIdentity, isLotAvailable, latestLotQuality, lockLotQuality, lockReceivingReceipts } from '../inspections/lot-quality';
 import { CreateShipmentDto, QueryShipmentsDto, UpdateShipmentDto } from './dto/create-shipment.dto';
 import { Shipment } from './entities/shipment.entity';
 
@@ -46,22 +47,36 @@ export class ShipmentsService {
   }
 
   async create(dto: CreateShipmentDto): Promise<Shipment> {
-    if (await this.repo.findOne({ where: { shipmentNumber: dto.shipmentNumber } }))
-      throw new ConflictException({ code: 'SHIPMENT_DUPLICATE', message: `Lô giao ${dto.shipmentNumber} đã tồn tại` });
-    const entity = this.repo.create(this.normalise(dto) as Partial<Shipment>);
-    this.applyStatusRules(entity);
-    return this.repo.save(entity);
+    return this.repo.manager.transaction(async manager => {
+      if (await manager.findOneBy(Shipment, { shipmentNumber: dto.shipmentNumber }))
+        throw new ConflictException({ code: 'SHIPMENT_DUPLICATE', message: `Lô giao ${dto.shipmentNumber} đã tồn tại` });
+      const entity = manager.create(Shipment, this.normalise(dto) as Partial<Shipment>);
+      this.applyStatusRules(entity);
+      if (entity.actualShipDate) await this.assertLotCanDispatch(manager, entity.itemNumber, entity.lotNumber);
+      return manager.save(entity);
+    });
   }
 
   async update(id: string, dto: UpdateShipmentDto): Promise<Shipment> {
-    const row = await this.findOne(id);
-    if (dto.shipmentNumber && dto.shipmentNumber !== row.shipmentNumber) {
-      if (await this.repo.findOne({ where: { shipmentNumber: dto.shipmentNumber } }))
+    return this.repo.manager.transaction(async manager => {
+      const row = await manager.findOne(Shipment, { where: { id }, lock: { mode: 'pessimistic_write' } });
+      if (!row) throw new NotFoundException({ code: 'SHIPMENT_NOT_FOUND', message: 'Không tìm thấy lô giao hàng' });
+      if (dto.shipmentNumber && dto.shipmentNumber !== row.shipmentNumber
+        && await manager.findOneBy(Shipment, { shipmentNumber: dto.shipmentNumber })) {
         throw new ConflictException({ code: 'SHIPMENT_DUPLICATE', message: `Lô giao ${dto.shipmentNumber} đã tồn tại` });
-    }
-    Object.assign(row, this.normalise(dto));
-    this.applyStatusRules(row);
-    return this.repo.save(row);
+      }
+      const previousLot = row.lotNumber;
+      const previousSku = row.itemNumber;
+      const previousDate = row.actualShipDate?.getTime();
+      const previousStatus = row.shipmentStatus;
+      Object.assign(row, this.normalise(dto));
+      this.applyStatusRules(row);
+      if (row.actualShipDate && (previousDate !== row.actualShipDate.getTime() || previousLot !== row.lotNumber
+        || previousSku !== row.itemNumber || previousStatus !== row.shipmentStatus)) {
+        await this.assertLotCanDispatch(manager, row.itemNumber, row.lotNumber);
+      }
+      return manager.save(row);
+    });
   }
 
   async remove(id: string): Promise<void> {
@@ -74,6 +89,24 @@ export class ShipmentsService {
       if (f in out) out[f] = out[f] ? new Date(out[f] as string) : null;
     }
     return out;
+  }
+
+  private async assertLotCanDispatch(manager: EntityManager, productCode: string, lotNumber: string | null): Promise<void> {
+    await lockLotQuality(manager, false);
+    // Receiving can add a scoped PART to a formerly unscoped lot.
+    await lockReceivingReceipts(manager, true);
+    const lotId = await findLotIdentity(manager, productCode, lotNumber);
+    const [scoped] = lotId ? await manager.query(
+      'SELECT 1 FROM parts WHERE lot_id=$1 AND (quality_scope_id IS NOT NULL OR receiving_damaged) AND quantity_pcs>0 LIMIT 1',
+      [lotId],
+    ) : [];
+    if (scoped) throw new BadRequestException({
+      code: 'SHIPMENT_PART_REQUIRED', message: 'Lô có phạm vi QC theo PART. Hãy cấp phát qua nghiệp vụ xuất kho.',
+    });
+    const quality = await latestLotQuality(manager, lotId ? [lotId] : []);
+    if (!lotId || !isLotAvailable(quality.get(lotId)?.judgment)) {
+      throw new BadRequestException({ code: 'SHIPMENT_LOT_QC_BLOCKED', message: 'Lô bị QC chặn giao' });
+    }
   }
 
   private applyStatusRules(s: Shipment): void {

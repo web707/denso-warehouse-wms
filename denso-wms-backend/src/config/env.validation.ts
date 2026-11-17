@@ -79,6 +79,39 @@ class EnvironmentVariables {
 
   @IsString()
   APP_PUBLIC_URL: string = 'http://localhost:3001';
+
+  @IsOptional()
+  @IsString()
+  TRUST_PROXY?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(5)
+  @Max(200)
+  DB_POOL_MAX?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1000)
+  THROTTLE_TTL_MS?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(10)
+  THROTTLE_USER_LIMIT?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(3)
+  THROTTLE_AUTH_LIMIT?: number;
+
+  @IsOptional()
+  @IsIn(['disable', 'require', 'verify-ca', 'verify-full'])
+  DB_SSL_MODE?: string;
+
+  @IsOptional()
+  @IsString()
+  DB_SSL_CA_PATH?: string;
 }
 
 export function validate(config: Record<string, unknown>) {

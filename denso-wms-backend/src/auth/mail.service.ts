@@ -29,7 +29,11 @@ export class MailService {
     if (!this.transporter) {
       // No SMTP configured (dev default): log instead of sending, so
       // /auth/forgot-password stays fully testable with no mail infrastructure.
-      this.logger.log(`[DEV MAIL] To: ${to} | Subject: ${subject} | Reset URL: ${resetUrl}`);
+      if (this.config.get<string>('nodeEnv') === 'development') {
+        this.logger.log(`[DEV MAIL] To: ${to} | Subject: ${subject} | Reset URL: ${resetUrl}`);
+      } else {
+        this.logger.warn('SMTP is not configured for password-reset delivery');
+      }
       return;
     }
 

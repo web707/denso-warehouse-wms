@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, Search } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/api';
 import { useStore } from '@/lib/store';
 import { fmtNum } from '@/lib/calculations';
 import { subinventoryCode } from '@/lib/warehouse';
 import {
-  JUDGMENT, SHIPMENT_STATUS, WO_STATUS, fmtDate, useInspections, useShipments, useWorkOrders,
+  JUDGMENT, SHIPMENT_STATUS, WO_STATUS, fmtDate, isQcAvailable, useInspections, useLotStatus, useShipments, useWorkOrders,
 } from '@/lib/supplyChain';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,44 +37,40 @@ const Empty = ({ text }) => <p className="text-sm text-slate-500">{text}</p>;
 export default function Traceability() {
   const [params, setParams] = useSearchParams();
   const lot = params.get('lot') || '';
+  const sku = params.get('sku') || '';
   const [input, setInput] = useState(lot);
   const { parts, racks } = useStore();
   const { data: workOrders = [] } = useWorkOrders();
   const { data: inspections = [] } = useInspections();
+  const { data: lotStatuses = [] } = useLotStatus();
   const { data: shipments = [] } = useShipments();
 
   const rackById = useMemo(() => new Map(racks.map((r) => [r.id, r])), [racks]);
 
-  // Danh sách lô đã biết từ mọi khâu, kèm kết luận kiểm tra mới nhất
-  const knownLots = useMemo(() => {
-    const latest = new Map();
-    [...inspections].sort((a, b) => new Date(b.inspectionDate) - new Date(a.inspectionDate)).forEach((i) => {
-      if (!latest.has(norm(i.lotNumber))) latest.set(norm(i.lotNumber), i.judgment);
-    });
-    const names = new Map();
-    const add = (n) => { if (n && !names.has(norm(n))) names.set(norm(n), n); };
-    parts.forEach((p) => add(p.lotNumber));
-    workOrders.forEach((w) => add(w.lotNumber));
-    inspections.forEach((i) => add(i.lotNumber));
-    shipments.forEach((s) => add(s.lotNumber));
-    return [...names.entries()].map(([k, name]) => ({ name, judgment: latest.get(k) || null })).sort((a, b) => a.name.localeCompare(b.name));
-  }, [parts, workOrders, inspections, shipments]);
-
-  const key = norm(lot);
+  const matches = lotStatuses.filter((l) => !l.qualityScopeId && (!lot || norm(l.lotNumber).includes(norm(lot))));
+  const scoped = new Map(lotStatuses.filter(row => row.qualityScopeId).map(row => [row.qualityScopeId, row.judgment]));
+  const exact = matches.filter((l) => l.lotNumber === lot);
+  const identity = sku ? exact.find((l) => l.productCode === sku) : (exact.length === 1 ? exact[0] : null);
+  const { data: ledger = [], isPending: ledgerPending, isError: ledgerError } = useQuery({
+    queryKey: ['inventory', 'traceability', identity?.lotId],
+    queryFn: () => api.inventory.list({ lotId: identity.lotId, limit: 200 }),
+    enabled: !!identity,
+  });
   const data = useMemo(() => {
-    if (!key) return null;
-    const insp = inspections.filter((i) => norm(i.lotNumber) === key).sort((a, b) => new Date(b.inspectionDate) - new Date(a.inspectionDate));
+    if (!identity) return null;
+    const matchesPair = (row) => row.lotNumber?.trim() === identity.lotNumber
+      && row.itemNumber?.trim() === identity.productCode;
     return {
-      workOrders: workOrders.filter((w) => norm(w.lotNumber) === key),
-      parts: parts.filter((p) => norm(p.lotNumber) === key),
-      inspections: insp,
-      shipments: shipments.filter((s) => norm(s.lotNumber) === key),
-      latest: insp[0] || null,
+      workOrders: workOrders.filter(matchesPair),
+      parts: parts.filter((p) => p.lotId === identity.lotId),
+      inspections: inspections.filter((i) => i.lotId === identity.lotId),
+      shipments: shipments.filter(matchesPair),
+      latest: identity.inspectionId ? identity : null,
     };
-  }, [key, workOrders, parts, inspections, shipments]);
+  }, [identity, workOrders, parts, inspections, shipments]);
 
   const warnings = useMemo(() => {
-    if (!data?.latest || data.latest.judgment === 'OK') return [];
+    if (!data?.latest || isQcAvailable(data.latest.judgment)) return [];
     const j = data.latest.judgment;
     const out = [];
     const inStock = data.parts.length;
@@ -92,14 +90,14 @@ export default function Traceability() {
     <div className="p-4 sm:p-6 md:p-8 max-w-5xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Truy vết theo lô</h1>
-        <p className="text-sm text-slate-500 mt-1">Nhập Lot Number để xem lô đó đi qua sản xuất, kho, kiểm tra chất lượng và giao hàng.</p>
+        <p className="text-sm text-slate-500 mt-1">Tìm số lô và chọn SKU để xem nguồn gốc, tồn kho, kiểm định và giao hàng.</p>
       </div>
 
       <form onSubmit={submit} className="flex gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" aria-hidden="true" />
           <Input list="known-lots" value={input} onChange={(e) => setInput(e.target.value)} placeholder="LOT-2026-001" aria-label="Lot Number" className="pl-9" />
-          <datalist id="known-lots">{knownLots.map((l) => <option key={l.name} value={l.name} />)}</datalist>
+          <datalist id="known-lots">{[...new Set(matches.map((l) => l.lotNumber))].map((name) => <option key={name} value={name} />)}</datalist>
         </div>
         <Button type="submit">Truy vết</Button>
       </form>
@@ -107,19 +105,19 @@ export default function Traceability() {
       {!data && (
         <section className="rounded-xl border border-slate-200 bg-white p-5">
           <h2 className="text-base font-semibold text-slate-900">Các lô đã biết</h2>
-          {knownLots.length === 0 ? (
+          {matches.length === 0 ? (
             <p className="mt-2 text-sm text-slate-500">Chưa có lô nào. Hãy gán Lot Number cho PART, lệnh sản xuất, phiếu kiểm tra hoặc lô giao.</p>
           ) : (
             <div className="mt-3 flex flex-wrap gap-2">
-              {knownLots.slice(0, 40).map((l) => (
+              {matches.slice(0, 40).map((l) => (
                 <button
-                  key={l.name}
+                  key={l.lotId}
                   type="button"
-                  onClick={() => { setInput(l.name); setParams({ lot: l.name }); }}
+                  onClick={() => { setInput(l.lotNumber); setParams({ lot: l.lotNumber, sku: l.productCode }); }}
                   className="inline-flex items-center gap-2 h-8 rounded-md border border-slate-200 px-3 text-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  {l.name}
-                  {l.judgment && <Pill tone={JUDGMENT[l.judgment].tone}>{l.judgment}</Pill>}
+                  {l.lotNumber} · {l.productCode}
+                  {l.judgment && <Pill tone={JUDGMENT[l.judgment]?.tone || 'amber'}>{JUDGMENT[l.judgment]?.label || 'Cần kiểm định'}</Pill>}
                 </button>
               ))}
             </div>
@@ -132,13 +130,13 @@ export default function Traceability() {
           <div className="rounded-xl border border-slate-200 bg-white p-5 flex flex-wrap items-center gap-x-6 gap-y-2">
             <div>
               <p className="text-xs text-slate-500">Lot Number</p>
-              <p className="text-xl font-semibold text-slate-900">{lot}</p>
+              <p className="text-xl font-semibold text-slate-900">{identity.lotNumber} · {identity.productCode}</p>
             </div>
             <div>
               <p className="text-xs text-slate-500">Kết luận chất lượng mới nhất</p>
               {data.latest
                 ? <p className="mt-0.5"><Pill tone={JUDGMENT[data.latest.judgment].tone}>{data.latest.judgment}</Pill> <span className="text-xs text-slate-500">{data.latest.inspectionType} · {fmtDate(data.latest.inspectionDate)}</span></p>
-                : <p className="text-sm text-slate-500 mt-0.5">Chưa kiểm tra</p>}
+                : <p className="text-sm text-slate-500 mt-0.5">Cần kiểm định</p>}
             </div>
           </div>
 
@@ -169,7 +167,7 @@ export default function Traceability() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="text-xs text-slate-500"><tr>
-                    {['PART', 'Item Number', 'Vị trí', 'Số lượng', 'Hạn dùng', 'Nhà cung cấp'].map((h) => <th key={h} className="py-2 pr-3 text-left font-medium whitespace-nowrap">{h}</th>)}
+                    {['PART', 'Item Number', 'Vị trí', 'Số lượng', 'Hạn dùng', 'QC', 'Nhà cung cấp'].map((h) => <th key={h} className="py-2 pr-3 text-left font-medium whitespace-nowrap">{h}</th>)}
                   </tr></thead>
                   <tbody>
                     {data.parts.map((p) => (
@@ -179,6 +177,7 @@ export default function Traceability() {
                         <td className="py-2 pr-3 whitespace-nowrap">{p.rackId ? subinventoryCode(rackById.get(p.rackId), p.preferredRackSlot) : <span className="text-slate-400">Chưa xếp kệ</span>}</td>
                         <td className="py-2 pr-3 tabular-nums whitespace-nowrap">{fmtNum(p.quantity)} {p.uomCode}</td>
                         <td className="py-2 pr-3 whitespace-nowrap"><ExpiryBadge date={p.expirationDate} /></td>
+                        <td className="py-2 pr-3">{p.receivingDamaged ? 'BLOCKED' : p.qualityScopeId ? (scoped.get(p.qualityScopeId) === 'REINSPECTION_REQUIRED' ? 'Chờ QC' : scoped.get(p.qualityScopeId) || 'Chờ QC') : identity.judgment}</td>
                         <td className="py-2 text-slate-600">{p.supplierName || '—'}</td>
                       </tr>
                     ))}
@@ -186,6 +185,18 @@ export default function Traceability() {
                 </table>
               </div>
             )}
+          </Section>
+
+          <Section step="3" title="Sổ giao dịch theo lô" count={ledger.length}>
+            {ledgerPending && <Empty text="Đang tải giao dịch…" />}
+            {ledgerError && <Empty text="Không tải được sổ giao dịch." />}
+            {!ledgerPending && !ledgerError && ledger.length === 0 && <Empty text="Chưa có giao dịch gắn định danh lô." />}
+            {ledger.length > 0 && <ul className="divide-y divide-slate-200">
+              {ledger.map((row) => <li key={row.id} className="py-2 text-sm">
+                <p>{fmtDate(row.createdAt, true)} · {row.type} · {fmtNum(row.quantityPcs)} đơn vị</p>
+                <p className="break-all text-xs text-slate-500">PART {row.partId}{row.destinationPartId ? ` → ${row.destinationPartId}` : ''}</p>
+              </li>)}
+            </ul>}
           </Section>
 
           <Section step="4" title="Kiểm tra chất lượng" count={data.inspections.length} to="/inspections" linkLabel="Mở Kiểm tra chất lượng">

@@ -1,272 +1,204 @@
 import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, ArrowRightLeft, CheckCircle2, MapPinned, QrCode, Warehouse } from 'lucide-react';
+import { ArrowDownToLine, ArrowLeftRight, ArrowUpFromLine, ChevronRight, Clock3, QrCode, Warehouse } from 'lucide-react';
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { api } from '@/api';
 import { useStore } from '@/lib/store';
-import MasanOpsGuide from '@/components/MasanOpsGuide';
-import { calcPartCbm, fmtDec, fmtNum } from '@/lib/calculations';
-import { RACK_STATUS_META, RACK_STATUS_ORDER, SLOTS_PER_RACK, expiryInfo, summarizeWarehouse } from '@/lib/warehouse';
-import { isShipmentLate, isWorkOrderOverdue, lotStatusMap, useLotStatus, useShipments, useWorkOrders } from '@/lib/supplyChain';
-import UtilizationBar from '@/components/UtilizationBar';
+import { summarizeWarehouse } from '@/lib/warehouse';
+import { fmtNum } from '@/lib/calculations';
+import { fmtDate } from '@/lib/supplyChain';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import { cn } from '@/lib/utils';
 
-const LEGEND = RACK_STATUS_ORDER.map((key) => ({ key, ...RACK_STATUS_META[key] }));
+const transactionLabel = { inbound: 'Nhập kho', outbound: 'Xuất kho', transfer: 'Điều chuyển', adjustment: 'Điều chỉnh tồn' };
+const actions = [
+  { to: '/inventory?mode=inbound', label: 'Nhập kho', icon: ArrowDownToLine },
+  { to: '/inventory?mode=outbound', label: 'Xuất kho', icon: ArrowUpFromLine },
+  { to: '/inventory?mode=transfer', label: 'Điều chuyển', icon: ArrowLeftRight },
+  { to: '/qr-labels', label: 'QR & Barcode', icon: QrCode },
+];
 
-function KpiCell({ label, value, unit, sub, children, to, tone }) {
-  const body = (
-    <div className="p-5 h-full">
-      <p className="text-sm text-slate-500">{label}</p>
-      <p className={cn('mt-1 text-3xl font-semibold tabular-nums text-slate-900', tone === 'warn' && 'text-amber-600')}>
-        {value}
-        {unit && <span className="ml-1 text-base font-medium text-slate-500">{unit}</span>}
-      </p>
-      {sub && <p className="mt-1 text-xs text-slate-500">{sub}</p>}
-      {children}
-    </div>
-  );
-  return to ? (
-    <Link to={to} className="block hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
-      {body}
-    </Link>
-  ) : (
-    body
-  );
+function metricValue(state, value, empty = 'Chưa có dữ liệu') {
+  if (state === 'loading') return 'Đang tải…';
+  if (state === 'error') return 'Không tải được';
+  if (state === 'unavailable') return 'Chưa có nguồn dữ liệu';
+  return value == null ? empty : fmtNum(value);
 }
 
-function DashboardSkeleton() {
-  return (
-    <div className="p-4 sm:p-4 sm:p-6 md:p-8 max-w-7xl mx-auto space-y-6" aria-busy="true">
-      <Skeleton className="h-9 w-72" />
-      <Skeleton className="h-28 w-full" />
-      <Skeleton className="h-64 w-full" />
-    </div>
-  );
+function SectionHeading({ title, action, to }) {
+  return <div className="flex flex-wrap items-center justify-between gap-2">
+    <h2 className="text-base font-semibold text-foreground">{title}</h2>
+    {to && <Link className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline" to={to}>{action}<ChevronRight size={14} /></Link>}
+  </div>;
 }
 
 export default function Dashboard() {
-  const { orders, parts, racks, isLoading } = useStore();
+  const { racks, parts, racksStatus, partsStatus, refetchParts, refetchRacks } = useStore();
+  const summary = useQuery({
+    queryKey: ['dashboard', 'stock'],
+    queryFn: async () => {
+      try {
+        return await api.parts.dashboardSummary();
+      } catch {
+        return null;
+      }
+    },
+  });
+  const activity = useQuery({
+    queryKey: ['dashboard', 'activity'],
+    queryFn: async () => {
+      try {
+        const res = await api.inventory.transactionSummary(7);
+        if (Array.isArray(res) && res.length > 0) return res;
+      } catch {}
+      try {
+        const res = await api.inventory.list({ limit: 100 });
+        const items = Array.isArray(res) ? res : (res?.items || []);
+        const daysMap = {};
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const key = d.toISOString().slice(0, 10);
+          daysMap[key] = { date: key, inbound: 0, outbound: 0 };
+        }
+        for (const tx of items) {
+          const date = tx.createdAt ? tx.createdAt.slice(0, 10) : '';
+          if (daysMap[date]) {
+            const qty = Number(tx.quantityPcs) || 1;
+            if (tx.type === 'inbound') daysMap[date].inbound += qty;
+            else if (tx.type === 'outbound') daysMap[date].outbound += qty;
+            else if (tx.type === 'transfer') daysMap[date].inbound += Math.round(qty / 2);
+          }
+        }
+        return Object.values(daysMap);
+      } catch {
+        return [];
+      }
+    },
+  });
+  const recent = useQuery({ queryKey: ['dashboard', 'recent'], queryFn: () => api.inventory.list({ limit: 7 }) });
+  const warehouse = useMemo(() => summarizeWarehouse(racks, parts), [racks, parts]);
 
-  const wh = useMemo(() => summarizeWarehouse(racks, parts), [racks, parts]);
-  const { data: workOrders = [] } = useWorkOrders();
-  const { data: shipments = [] } = useShipments();
-  const { data: lotStatus = [] } = useLotStatus();
+  const computedStock = useMemo(() => {
+    if (summary.data) return summary.data;
+    if (!parts || parts.length === 0) return null;
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+    const thirtyDaysLater = new Date(now.getTime() + 30 * 86400000).toISOString().slice(0, 10);
 
-  const chain = useMemo(() => {
-    const status = lotStatusMap(lotStatus);
-    const blocked = parts.filter((p) => p.lotNumber && status.get(p.lotNumber) && status.get(p.lotNumber).judgment !== 'OK');
+    const validParts = parts.filter(p => (Number(p.quantity) || 0) > 0 || (Number(p.cartons) || 0) > 0);
+    const uniqueSkus = new Set(validParts.map(p => p.productCode || p.partName).filter(Boolean));
+    const totalPhysical = parts.reduce((sum, p) => sum + (Number(p.quantity) || 0), 0);
+    const expiredCount = parts.filter(p => p.expirationDate && p.expirationDate < todayStr && (Number(p.quantity) || 0) > 0).length;
+    const soonExpiringCount = parts.filter(p => p.expirationDate && p.expirationDate >= todayStr && p.expirationDate <= thirtyDaysLater && (Number(p.quantity) || 0) > 0).length;
+    const unallocated = parts.filter(p => !p.rackId && (Number(p.quantity) || 0) > 0).length;
+    const holdQty = parts.filter(p => p.receivingDamaged).reduce((sum, p) => sum + (Number(p.quantity) || 0), 0);
+
     return {
-      overdueWo: workOrders.filter((w) => isWorkOrderOverdue(w)),
-      blockedParts: blocked,
-      blockedLot: blocked[0]?.lotNumber,
-      lateShipments: shipments.filter(isShipmentLate),
+      physicalQuantityPcs: totalPhysical,
+      stockedSkuCount: uniqueSkus.size,
+      pendingShipmentCount: 0,
+      pendingQcQuantityPcs: 0,
+      holdQuantityPcs: holdQty,
+      soonExpiringPartsCount: soonExpiringCount,
+      expiredPartsCount: expiredCount,
+      unallocatedCount: unallocated,
     };
-  }, [workOrders, shipments, lotStatus, parts]);
+  }, [summary.data, parts]);
 
-  const stats = useMemo(() => ({
-    totalCbm: parts.reduce((s, p) => s + calcPartCbm(p), 0),
-    totalWeight: parts.reduce((s, p) => s + (p.weight || 0), 0),
-    totalCartons: parts.reduce((s, p) => s + (p.cartons || 0), 0),
-    unallocatedCount: wh.unallocated.length,
-    unallocatedCbm: wh.unallocated.reduce((s, p) => s + calcPartCbm(p), 0),
-    totalSlots: wh.totalSlots,
-    usedSlots: wh.usedSlots,
-  }), [parts, wh]);
-
-  const zones = wh.zones;
-
-  const expiry = useMemo(() => {
-    const expired = [];
-    const soon = [];
-    parts.forEach((p) => {
-      const info = expiryInfo(p.expirationDate);
-      if (info?.status === 'expired') expired.push(p);
-      else if (info?.status === 'soon') soon.push(p);
-    });
-    return { expired, soon };
-  }, [parts]);
-
-  const alerts = useMemo(() => {
-    const over = wh.racks.filter((r) => r.status === 'overload');
-    const near = wh.racks.filter((r) => r.status === 'near' || r.status === 'full');
-    const list = [];
-    if (over.length) list.push({ tone: 'red', text: `${over.length} kệ quá tải`, hint: over.slice(0, 3).map((r) => r.rack.name).join(', '), to: `/racks/${over[0].rack.id}/plan` });
-    if (near.length) list.push({ tone: 'amber', text: `${near.length} kệ gần đầy hoặc đầy`, hint: near.slice(0, 3).map((r) => r.rack.name).join(', '), to: `/racks/${near[0].rack.id}/plan` });
-    if (expiry.expired.length) list.push({ tone: 'red', text: `${expiry.expired.length} PART đã hết hạn`, hint: expiry.expired.slice(0, 3).map((p) => p.partName).join(', '), to: `/orders/${expiry.expired[0].orderId}` });
-    if (expiry.soon.length) list.push({ tone: 'amber', text: `${expiry.soon.length} PART sắp hết hạn (≤ 30 ngày)`, hint: expiry.soon.slice(0, 3).map((p) => p.partName).join(', '), to: `/orders/${expiry.soon[0].orderId}` });
-    if (chain.blockedParts.length) list.push({ tone: 'red', text: `${chain.blockedParts.length} PART thuộc lô NG/HOLD`, hint: 'Cần cách ly, không xuất đi', to: `/trace?lot=${encodeURIComponent(chain.blockedLot)}` });
-    if (chain.overdueWo.length) list.push({ tone: 'amber', text: `${chain.overdueWo.length} lệnh sản xuất trễ hạn`, hint: chain.overdueWo.slice(0, 3).map((w) => w.workOrderNumber).join(', '), to: '/work-orders' });
-    if (chain.lateShipments.length) list.push({ tone: 'amber', text: `${chain.lateShipments.length} lô giao đang trễ`, hint: chain.lateShipments.slice(0, 3).map((s) => s.shipmentNumber).join(', '), to: '/shipments' });
-    if (stats.unallocatedCount) list.push({ tone: 'amber', text: `${fmtNum(stats.unallocatedCount)} PART chưa xếp kệ`, hint: `${fmtDec(stats.unallocatedCbm, 2)} m³ đang chờ`, to: '/orders' });
-    return list;
-  }, [wh, stats, expiry, chain]);
-
-  const watchList = useMemo(
-    () => wh.racks.filter((r) => r.partCount > 0).sort((a, b) => b.loadPct - a.loadPct).slice(0, 8),
-    [wh],
-  );
-
-  if (isLoading) return <DashboardSkeleton />;
-
-  const slotPct = stats.totalSlots ? (stats.usedSlots / stats.totalSlots) * 100 : 0;
-
-  return (
-    <div className="p-4 sm:p-4 sm:p-6 md:p-8 max-w-7xl mx-auto space-y-6">
-      <MasanOpsGuide />
-      <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex flex-wrap justify-between gap-3 items-center">
-        <div><p className="text-sm font-semibold text-emerald-900">Quản lý hàng cũ / mới theo FEFO</p><p className="text-xs text-emerald-800 mt-1">Ưu tiên xem lô có HSD gần nhất, kiểm tra lô sắp hoặc đã hết hạn trước khi xuất kho.</p></div>
-        <Button variant="outline" asChild className="bg-white border-emerald-200 text-emerald-800"><Link to="/fefo">Mở danh sách FEFO</Link></Button>
+  const stock = summary.data || computedStock;
+  const warehouseStatus = [racksStatus, partsStatus].includes('error') ? 'error'
+    : [racksStatus, partsStatus].includes('loading') ? 'loading' : 'ready';
+  const stockStatus = stock ? 'ready' : (summary.isPending || partsStatus === 'loading') ? 'loading' : 'ready';
+  const capacity = warehouse.totalSlots ? Math.round(100 * warehouse.usedSlots / warehouse.totalSlots) : null;
+  const receivingSummary = useQuery({
+    queryKey: ['dashboard', 'receivingSummary'],
+    queryFn: async () => {
+      try {
+        return await api.receiving.summary();
+      } catch {
+        return { pendingCount: 0, totalDamagedPcs: 0 };
+      }
+    },
+  });
+  const kpis = [
+    { label: 'Tổng tồn kho', value: stock?.physicalQuantityPcs, unit: 'đơn vị' },
+    { label: 'SKU có tồn', value: stock?.stockedSkuCount, unit: 'SKU' },
+    { label: 'Sai lệch nhận hàng', value: receivingSummary.data?.pendingCount ?? 0, unit: 'phiếu chờ duyệt', tone: (receivingSummary.data?.pendingCount > 0 ? 'text-amber-500 font-bold' : 'text-foreground'), to: '/inventory?tab=receiving', hint: receivingSummary.data?.totalDamagedPcs > 0 ? `Hỏng: ${fmtNum(receivingSummary.data.totalDamagedPcs)} đv trong ZONE-Q` : undefined },
+    { label: 'Phiếu xuất chờ', value: stock?.pendingShipmentCount, unit: 'phiếu', to: '/shipments' },
+    { label: 'Hàng chờ QC', value: stock?.pendingQcQuantityPcs, unit: 'đơn vị', to: '/inspections' },
+    { label: 'Hàng HOLD', value: stock?.holdQuantityPcs, unit: 'đơn vị', tone: 'text-red-500', to: '/inspections' },
+    { label: 'Sắp hết hạn', value: stock?.soonExpiringPartsCount, unit: 'PART', tone: 'text-amber-500', to: '/fefo' },
+    { label: 'Sử dụng sức chứa', value: capacity, state: warehouseStatus, unit: '%', hint: warehouseStatus === 'ready' && capacity !== null ? `${fmtNum(warehouse.usedSlots)} / ${fmtNum(warehouse.totalSlots)} ô` : undefined, to: '/racks' },
+  ];
+  const alerts = [
+    { label: 'Biên bản sai lệch cần duyệt', value: receivingSummary.data?.pendingCount || 0, to: '/inventory?tab=receiving', color: 'text-amber-500 font-bold' },
+    { label: 'PART đã hết hạn', value: stock?.expiredPartsCount, to: '/fefo', color: 'text-red-500' },
+    { label: 'PART chưa xếp kệ', value: stock?.unallocatedCount, to: '/orders', color: 'text-amber-500' },
+    { label: 'Kệ quá tải', value: warehouse.racks.filter(r => r.status === 'overload').length, state: warehouseStatus, to: '/racks', color: 'text-red-500' },
+  ];
+  return <div className="mx-auto max-w-[1500px] min-w-0 space-y-5 px-4 py-5 md:px-7 md:py-7">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Tổng quan kho</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Tồn kho, chất lượng và hoạt động vận hành</p>
       </div>
-      <div className="flex flex-wrap gap-3 items-end justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Tổng quan kho</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            {fmtNum(orders.length)} lô sản phẩm · {zones.length} Zone · {fmtNum(wh.physicalRacks.length)} kệ vật lý
-            {wh.surplusRecordCount > 0 && <span className="ml-2 text-amber-600">· {wh.surplusRecordCount} bản ghi dư/trùng cần đối chiếu</span>}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button asChild variant="outline" className="bg-white">
-            <Link to="/qr-labels"><QrCode className="w-4 h-4 mr-2" />QR & Barcode</Link>
-          </Button>
-          <Button asChild>
-            <Link to="/inventory"><ArrowRightLeft className="w-4 h-4 mr-2" />Nhập · Xuất</Link>
-          </Button>
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-slate-200 bg-white grid grid-cols-2 lg:grid-cols-4 divide-slate-200 divide-y lg:divide-y-0 lg:divide-x [&>*:nth-child(2n)]:border-l [&>*:nth-child(2n)]:border-slate-200 lg:[&>*:nth-child(2n)]:border-l-0 overflow-hidden">
-        <KpiCell label="PART trong kho" value={fmtNum(parts.length)} sub={`${fmtNum(stats.totalCartons)} thùng`} />
-        <KpiCell
-          label="Chưa xếp kệ"
-          value={fmtNum(stats.unallocatedCount)}
-          sub={stats.unallocatedCount ? `${fmtDec(stats.unallocatedCbm, 2)} m³ chờ xếp` : 'Đã xếp hết'}
-          tone={stats.unallocatedCount ? 'warn' : undefined}
-          to={stats.unallocatedCount ? '/orders' : undefined}
-        />
-        <KpiCell label="Ô đang dùng" value={`${stats.usedSlots}`} unit={`/ ${stats.totalSlots}`} sub={`${Math.max(0, stats.totalSlots - stats.usedSlots)} ô còn trống`}>
-          <div className="mt-3 h-1.5 rounded-full bg-slate-100 overflow-hidden" role="progressbar" aria-valuenow={Math.round(slotPct)} aria-valuemin={0} aria-valuemax={100} aria-label="Mức sử dụng ô">
-            <div className="h-full rounded-full bg-indigo-500" style={{ width: `${Math.min(slotPct, 100)}%` }} />
-          </div>
-        </KpiCell>
-        <KpiCell label="Tổng khối lượng" value={fmtNum(stats.totalWeight)} unit="kg" sub={`${fmtDec(stats.totalCbm, 2)} m³`} />
-      </div>
-
-      <section aria-label="Cần xử lý">
-        {alerts.length === 0 ? (
-          <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-            <CheckCircle2 className="w-5 h-5 shrink-0" />
-            Không có kệ quá tải và mọi PART đã có vị trí.
-          </div>
-        ) : (
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {alerts.map((a) => (
-              <Link
-                key={a.text}
-                to={a.to}
-                className={cn(
-                  'flex items-start gap-3 rounded-xl border px-4 py-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  a.tone === 'red' ? 'border-red-200 bg-red-50 hover:bg-red-100' : 'border-amber-200 bg-amber-50 hover:bg-amber-100',
-                )}
-              >
-                <AlertTriangle className={cn('w-5 h-5 mt-0.5 shrink-0', a.tone === 'red' ? 'text-red-600' : 'text-amber-600')} />
-                <div className="min-w-0">
-                  <p className={cn('text-sm font-semibold', a.tone === 'red' ? 'text-red-700' : 'text-amber-700')}>{a.text}</p>
-                  {a.hint && <p className="text-xs text-slate-600 truncate">{a.hint}</p>}
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="rounded-xl border border-slate-200 bg-white" aria-label="Công suất theo kệ">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-slate-200">
-          <div>
-            <h2 className="text-base font-semibold text-slate-900">Công suất theo kệ</h2>
-            <p className="text-xs text-slate-500 mt-0.5">Mỗi ô là một kệ, tô màu theo trạng thái (cùng quy tắc với trang Sơ đồ kho). Bấm vào kệ để xem sơ đồ.</p>
-          </div>
-          <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
-            {LEGEND.map((l) => (
-              <li key={l.label} className="flex items-center gap-1.5">
-                <span className={cn('w-3 h-3 rounded-sm', l.swatch)} aria-hidden="true" />
-                {l.label}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {zones.length === 0 ? (
-          <div className="py-12 text-center">
-            <Warehouse className="w-8 h-8 mx-auto text-slate-300" />
-            <p className="mt-3 text-sm font-medium text-slate-700">Chưa có kệ nào</p>
-            <p className="text-sm text-slate-500">Tạo Zone và kệ để bắt đầu xếp hàng.</p>
-            <Button asChild className="mt-4"><Link to="/zones">Mở Quản lý Zone</Link></Button>
-          </div>
-        ) : (
-          <div className="divide-y divide-slate-200">
-            {zones.map((z) => (
-              <div key={z.zoneCode} className="p-5">
-                <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
-                  <Link to={`/racks?zone=${encodeURIComponent(z.zoneCode)}`} className="inline-flex items-center gap-2 font-semibold text-slate-900 hover:text-indigo-600 focus-visible:outline-none focus-visible:underline">
-                    <MapPinned className="w-4 h-4 text-indigo-500" />
-                    {z.zoneCode}
-                  </Link>
-                  <p className="text-xs text-slate-500 tabular-nums">
-                    {z.usedRacks}/{z.rackCount} kệ có hàng · {z.usedSlots}/{z.totalSlots} ô · {z.partCount} PART · {fmtNum(z.totalWeight)} kg
-                  </p>
-                </div>
-                <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
-                  {z.physicalRacks.map((rs) => (
-                    <Link
-                      key={rs.rack.id}
-                      to={`/racks/${rs.rack.id}/plan`}
-                      title={`${rs.rack.name}: ${RACK_STATUS_META[rs.status].label} · ${rs.usedSlots}/${SLOTS_PER_RACK} ô · thể tích ${fmtDec(rs.cbmPct, 0)}% · tải ${fmtDec(rs.weightPct, 0)}%`}
-                      aria-label={`${rs.rack.name}, ${RACK_STATUS_META[rs.status].label}, ${rs.usedSlots} trên ${SLOTS_PER_RACK} ô`}
-                      className={cn(
-                        'h-12 rounded-md flex flex-col items-center justify-center leading-tight transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
-                        RACK_STATUS_META[rs.status].cell,
-                      )}
-                    >
-                      <span className="text-[11px] font-semibold truncate max-w-full px-1">{rs.rack.name}</span>
-                      {rs.usedSlots > 0 && <span className="text-[10px] tabular-nums opacity-90">{rs.usedSlots}/{SLOTS_PER_RACK}</span>}
-                    </Link>
-                  ))}
-                </div>
-                {z.surplusRecordCount > 0 && <p className="mt-2 text-xs text-amber-600">Có {z.surplusRecordCount} bản ghi kệ dư/trùng ngoài sơ đồ vật lý; xem Quản lý Zone để đối chiếu hàng.</p>}
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {watchList.length > 0 && (
-        <section className="rounded-xl border border-slate-200 bg-white" aria-label="Kệ cần theo dõi">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
-            <div>
-              <h2 className="text-base font-semibold text-slate-900">Kệ tải nặng nhất</h2>
-              <p className="text-xs text-slate-500 mt-0.5">8 kệ có thể tích hoặc tải trọng cao nhất.</p>
-            </div>
-            <Link to="/zones" className="text-sm font-medium text-indigo-600 hover:underline">Quản lý Zone</Link>
-          </div>
-          <div className="divide-y divide-slate-200">
-            {watchList.map(({ rack, ...st }) => (
-              <Link
-                key={rack.id}
-                to={`/racks/${rack.id}/plan`}
-                className="grid grid-cols-1 md:grid-cols-[200px_1fr_1fr] gap-3 md:gap-6 items-center px-5 py-3 hover:bg-slate-50 focus-visible:outline-none focus-visible:bg-slate-50"
-              >
-                <div>
-                  <p className="font-medium text-sm text-slate-900">{rack.name}</p>
-                  <p className="text-xs text-slate-500">{rack.zoneCode} · {st.partCount} PART</p>
-                </div>
-                <UtilizationBar percent={st.cbmPct} label="Thể tích" sublabel={`${fmtDec(st.totalCbm, 2)} / ${rack.maxCbm} m³`} />
-                <UtilizationBar percent={st.weightPct} label="Tải trọng" sublabel={`${fmtNum(st.totalWeight)} / ${fmtNum(rack.maxWeight)} kg`} />
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
+      <Button variant="outline" asChild><Link to="/racks"><Warehouse className="mr-2 size-4" />Sơ đồ kho</Link></Button>
     </div>
-  );
+    <nav aria-label="Thao tác nhanh" className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+      {actions.map(({ to, label, icon: Icon }, index) => <Button key={to} asChild variant={index === 0 ? 'default' : 'outline'} className="min-h-10 justify-start"><Link to={to}><Icon className="mr-2 size-4" />{label}</Link></Button>)}
+    </nav>
+    {!stock && summary.isError && <p role="status" className="text-sm text-amber-500">Không tải được số liệu tồn kho. <button className="underline" onClick={() => summary.refetch()}>Thử lại</button></p>}
+    {warehouseStatus === 'error' && <p role="status" className="text-sm text-amber-500">Không tải được vị trí kho. <button className="underline" onClick={() => { void Promise.allSettled([refetchParts(), refetchRacks()]); }}>Thử lại</button></p>}
+    <section aria-label="Chỉ số vận hành" className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border lg:grid-cols-4">
+      {kpis.map(({ label, value, unit, hint, to, tone, state = stockStatus }) => {
+        const display = metricValue(state, value, label === 'Sử dụng sức chứa' ? 'Chưa có ô lưu trữ' : undefined);
+        const hasNumber = state === 'ready' && value != null;
+        const content = <><p className="text-xs font-medium text-muted-foreground">{label}</p>
+          <p className={`mt-1 break-words font-semibold tabular-nums ${hasNumber ? `text-xl sm:text-2xl ${tone || 'text-foreground'}` : 'text-sm text-muted-foreground'}`}>{display} {hasNumber && <span className="text-xs font-normal text-muted-foreground">{unit}</span>}</p>
+          {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}</>;
+        const style = 'min-w-0 bg-card px-3 py-3 sm:px-4';
+        return to ? <Link key={label} to={to} className={`${style} hover:bg-accent`}>{content}</Link> : <div key={label} className={style}>{content}</div>;
+      })}
+    </section>
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(265px,1fr)]">
+      <section className="min-w-0 rounded-xl border bg-card p-4">
+        <SectionHeading title="Hoạt động 7 ngày" action="Báo cáo" to="/reports" />
+        <div className="mt-2 flex gap-4 text-xs text-muted-foreground"><span><i className="mr-1 inline-block size-2 rounded-sm bg-[#2DD4BF]" />Nhập</span><span><i className="mr-1 inline-block size-2 rounded-sm bg-[#60A5FA]" />Xuất</span></div>
+        {activity.isPending || activity.isError || !activity.data?.some(day => day.inbound || day.outbound) ? <p className="py-10 text-sm text-muted-foreground">{activity.isPending ? 'Đang tải hoạt động…' : activity.isError ? 'Không tải được hoạt động.' : 'Không có giao dịch nhập hoặc xuất trong 7 ngày.'}</p> :
+          <div className="mt-3 h-48 w-full" aria-label="Biểu đồ số giao dịch nhập và xuất theo ngày">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={activity.data} barGap={3} margin={{ left: 0, right: 5, top: 5 }}>
+                <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
+                <XAxis dataKey="date" tickFormatter={v => v.slice(5).split('-').reverse().join('/')} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} />
+                <YAxis width={43} tickFormatter={v => v >= 1000 ? `${v / 1000}k` : v} allowDecimals={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
+                <Bar dataKey="inbound" name="Nhập" fill="#2DD4BF" radius={[3, 3, 0, 0]} maxBarSize={26} isAnimationActive={false} />
+                <Bar dataKey="outbound" name="Xuất" fill="#60A5FA" radius={[3, 3, 0, 0]} maxBarSize={26} isAnimationActive={false} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>}
+      </section>
+      <section className="rounded-xl border bg-card p-4">
+        <SectionHeading title="Cần xử lý" />
+        <ul className="mt-3 divide-y divide-border">
+          {alerts.map(({ label, value, to, color, state = stockStatus }) => <li key={label}><Link to={to} className="flex min-h-11 items-center justify-between gap-3 py-2 text-sm hover:text-primary">
+            <span>{label}</span><span className={value > 0 ? color : 'text-muted-foreground'}>{metricValue(state, value)}</span>
+          </Link></li>)}
+        </ul>
+      </section>
+    </div>
+    <section className="rounded-xl border bg-card p-4">
+      <SectionHeading title="Giao dịch gần đây" action="Lịch sử kho" to="/history" />
+      {recent.isPending || recent.isError || recent.data?.length === 0 ? <p className="py-6 text-sm text-muted-foreground">{recent.isPending ? 'Đang tải giao dịch…' : recent.isError ? 'Không tải được giao dịch.' : 'Chưa có giao dịch.'}</p> :
+        <ul className="mt-2 divide-y divide-border">
+          {recent.data.map(row => <li key={row.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-2.5 text-sm sm:grid-cols-[7rem_minmax(0,1fr)_auto_10rem]">
+            <span className="text-xs text-muted-foreground">{transactionLabel[row.type] || row.type}</span>
+            <span className="order-3 break-words sm:order-none">{row.productCode && row.productCode !== row.partName ? `${row.productCode} · ` : ''}{row.partName}</span>
+            <span className="justify-self-end tabular-nums">{fmtNum(row.quantityPcs)} đv</span>
+            <span className="order-4 flex items-center justify-self-end gap-1 text-xs text-muted-foreground"><Clock3 size={13} />{fmtDate(row.createdAt, true)}</span>
+          </li>)}
+        </ul>}
+    </section>
+  </div>;
 }

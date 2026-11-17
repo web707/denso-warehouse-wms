@@ -1,6 +1,12 @@
 export default () => ({
   nodeEnv: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT || '5001', 10),
+  trustProxy: process.env.TRUST_PROXY || 'false',
+  throttle: {
+    ttlMs: parseInt(process.env.THROTTLE_TTL_MS || '60000', 10),
+    userLimit: parseInt(process.env.THROTTLE_USER_LIMIT || '600', 10),
+    authLimit: parseInt(process.env.THROTTLE_AUTH_LIMIT || '20', 10),
+  },
   // Comma-separated list of allowed origins (e.g. the production frontend
   // domain(s) plus localhost for dev) — see CORS_ORIGIN in .env.example.
   corsOrigin: (process.env.CORS_ORIGIN || 'http://localhost:3001')
@@ -13,6 +19,7 @@ export default () => ({
     username: process.env.DB_USERNAME,
     password: process.env.DB_PASSWORD,
     name: process.env.DB_NAME,
+    poolMax: parseInt(process.env.DB_POOL_MAX || '25', 10),
   },
   jwt: {
     accessSecret: process.env.JWT_ACCESS_SECRET,

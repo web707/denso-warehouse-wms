@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp, FileSpreadsheet, Printer, Search } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api } from '@/api';
@@ -69,11 +70,6 @@ function downloadCsv(rows) {
   URL.revokeObjectURL(a.href);
 }
 
-function dayKey(d) {
-  const dt = new Date(d);
-  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
-}
-
 function ChartCard({ title, hint, label, children, className }) {
   return (
     <section className={cn('rounded-xl border border-slate-200 bg-white p-5', className)}>
@@ -103,17 +99,13 @@ export default function Reports() {
   const { parts, racks, orders } = useStore();
   const [zone, setZone] = useState('ALL');
   const [range, setRange] = useState(30);
-  const [tx, setTx] = useState([]);
-  const [txError, setTxError] = useState(false);
+  const { data: tx = [], isError: txError, isPending: txLoading } = useQuery({
+    queryKey: ['inventory-transaction-summary', range, zone],
+    queryFn: () => api.inventory.transactionSummary(range, zone === 'ALL' ? undefined : zone),
+  });
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState({ key: 'zone', dir: 'asc' });
   const [visible, setVisible] = useState(PAGE_SIZE);
-
-  useEffect(() => {
-    api.inventory.list({ limit: 500 })
-      .then((res) => { setTx(Array.isArray(res) ? res : res?.items || []); setTxError(false); })
-      .catch(() => setTxError(true));
-  }, []);
 
   const wh = useMemo(() => summarizeWarehouse(racks, parts), [racks, parts]);
   const zoneCodes = useMemo(() => wh.zones.map((z) => z.zoneCode), [wh]);
@@ -187,31 +179,15 @@ export default function Reports() {
     return [...map.entries()].map(([name, kg]) => ({ name, kg: Math.round(kg) })).sort((a, b) => b.kg - a.kg).slice(0, 8);
   }, [rows]);
 
-  const txInRange = useMemo(() => {
-    const since = Date.now() - range * 86_400_000;
-    return tx.filter((t) => {
-      if (new Date(t.createdAt).getTime() < since) return false;
-      if (zone === 'ALL') return true;
-      const r = rackById.get(t.toRackId) || rackById.get(t.fromRackId);
-      return r && zoneOf(r) === zone;
-    });
-  }, [tx, range, zone, rackById]);
-
   const txCounts = useMemo(
-    () => Object.fromEntries(Object.keys(TX_META).map((k) => [k, txInRange.filter((t) => t.type === k).length])),
-    [txInRange],
+    () => Object.fromEntries(Object.keys(TX_META).map(key => [key, tx.reduce((sum, day) => sum + day[key], 0)])),
+    [tx],
   );
-
-  const txChart = useMemo(() => {
-    const days = [];
-    for (let i = range - 1; i >= 0; i -= 1) {
-      const d = new Date(); d.setDate(d.getDate() - i);
-      days.push({ key: dayKey(d), name: `${d.getDate()}/${d.getMonth() + 1}`, inbound: 0, outbound: 0, transfer: 0 });
-    }
-    const byKey = new Map(days.map((d) => [d.key, d]));
-    txInRange.forEach((t) => { const d = byKey.get(dayKey(t.createdAt)); if (d && d[t.type] !== undefined) d[t.type] += 1; });
-    return days;
-  }, [txInRange, range]);
+  const txTotal = Object.values(txCounts).reduce((sum, count) => sum + count, 0);
+  const txChart = useMemo(() => tx.map(day => {
+    const [, month, date] = day.date.split('-');
+    return { ...day, name: `${Number(date)}/${Number(month)}` };
+  }), [tx]);
 
   const toggleSort = (key) => {
     setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }));
@@ -252,7 +228,7 @@ export default function Reports() {
       <div className="grid lg:grid-cols-2 gap-4">
         <ChartCard
           title="Hoạt động theo ngày"
-          hint={`${fmtNum(txCounts.inbound)} nhập · ${fmtNum(txCounts.outbound)} xuất · ${fmtNum(txCounts.transfer)} điều chuyển trong ${range} ngày qua`}
+          hint={!txLoading && !txError ? `${fmtNum(txCounts.inbound)} nhập · ${fmtNum(txCounts.outbound)} xuất · ${fmtNum(txCounts.transfer)} điều chuyển trong ${range} ngày qua` : undefined}
           label={`Số giao dịch mỗi ngày trong ${range} ngày qua`}
           className="lg:col-span-2"
         >
@@ -275,7 +251,9 @@ export default function Reports() {
             </div>
             {txError ? (
               <Empty text="Không tải được lịch sử giao dịch. Thử làm mới trang." />
-            ) : txInRange.length === 0 ? (
+            ) : txLoading ? (
+              <Empty text="Đang tải thống kê giao dịch…" />
+            ) : txTotal === 0 ? (
               <Empty text="Chưa có giao dịch trong khoảng này." />
             ) : (
               <ResponsiveContainer width="100%" height="100%">

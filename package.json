@@ -1,0 +1,27 @@
+{
+  "name": "masan-consumer-wms-3d",
+  "version": "2.0.0",
+  "description": "Enterprise Warehouse Management System with Three.js 3D Digital Twin & Real-time Operations Control Center",
+  "private": true,
+  "scripts": {
+    "start:frontend": "cd denso-wms-frontend && npm run dev",
+    "start:backend": "cd denso-wms-backend && npm run start:dev",
+    "build:frontend": "cd denso-wms-frontend && npm run build",
+    "build:backend": "cd denso-wms-backend && npm run build",
+    "test:backend": "cd denso-wms-backend && npm run test"
+  },
+  "keywords": [
+    "warehouse-management-system",
+    "wms",
+    "threejs",
+    "digital-twin",
+    "3d-visualization",
+    "fefo",
+    "nestjs",
+    "react",
+    "typescript",
+    "postgresql"
+  ],
+  "author": "web707",
+  "license": "MIT"
+}

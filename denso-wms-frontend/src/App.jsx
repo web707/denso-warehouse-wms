@@ -1,12 +1,18 @@
+import CycleCounting from '@/pages/CycleCounting';
+import DispatchOrders from '@/pages/DispatchOrders';
+import Documents from '@/pages/Documents';
+import SupplyChain3D from '@/pages/SupplyChain3D';
 import { Toaster } from '@/components/ui/toaster';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClientInstance } from '@/lib/query-client';
-import { BrowserRouter as Router, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { ThemeProvider } from '@/lib/theme';
 import ScrollToTop from './components/ScrollToTop';
 import Layout from '@/components/Layout';
 import { StoreProvider } from '@/lib/store';
+import MasanOpsGuide from '@/components/MasanOpsGuide';
+import InboundJourney3D from '@/components/viz/InboundJourney3D';
 import Dashboard from '@/pages/Dashboard';
 import Orders from '@/pages/Orders';
 import OrderDetail from '@/pages/OrderDetail';
@@ -37,18 +43,26 @@ function AdminOnly({ children }) {
 
 function ProtectedApp() {
   const { signedIn, checking } = useAuth();
+  const location=useLocation();
   if (checking) return <div className="min-h-screen grid place-items-center text-slate-500">Đang kiểm tra phiên đăng nhập...</div>;
-  if (!signedIn) return <Navigate to="/login" replace />;
+  if (!signedIn) return <Navigate to="/login" replace state={{from:location.pathname+location.search}} />;
   return <StoreProvider><Routes>
     <Route element={<Layout />}>
       <Route path="/" element={<Dashboard />} />
+      <Route path="/guide" element={<div className="mx-auto max-w-6xl space-y-5 p-4 md:p-7"><h1 className="text-2xl font-semibold">Hướng dẫn nghiệp vụ</h1><MasanOpsGuide /><InboundJourney3D /></div>} />
       <Route path="/orders" element={<Orders />} />
       <Route path="/orders/:orderId" element={<OrderDetail />} />
       <Route path="/racks" element={<Racks />} />
+      <Route path="/control-center" element={<Racks />} />
       <Route path="/racks/:orderId" element={<RackAllocation />} />
       <Route path="/racks/:rackId/plan" element={<RackPlan />} />
       <Route path="/history" element={<History />} />
       <Route path="/packing-rules" element={<PackingRules />} />
+      <Route path="/cycle-counts" element={<CycleCounting />} />
+      <Route path="/dispatch-orders" element={<DispatchOrders />} />
+      <Route path="/documents" element={<Documents />} />
+      <Route path="/documents/:id" element={<Documents />} />
+      <Route path="/supply-chain-3d" element={<SupplyChain3D />} />
       <Route path="/inventory" element={<InventoryOperations />} />
       <Route path="/qr-labels" element={<QRLabels />} />
       <Route path="/work-orders" element={<WorkOrders />} />

@@ -36,9 +36,9 @@ export class MasanAccessGuard implements CanActivate {
 
   private allowStaff(path: string, method: string): boolean {
     const allowed = method === 'POST' && (
-      path === '/api/inventory/transactions' || path === '/api/inspections'
+      path === '/api/inventory/transactions' || path === '/api/inspections' || path === '/api/receiving'
     );
-    if (!allowed) throw new ForbiddenException('Nhân viên chỉ được ghi nghiệp vụ nhập/xuất/điều chuyển và kiểm định');
+    if (!allowed) throw new ForbiddenException('Nhân viên chỉ được ghi nghiệp vụ nhập/xuất/điều chuyển, nhận hàng và kiểm định');
     return true;
   }
 }

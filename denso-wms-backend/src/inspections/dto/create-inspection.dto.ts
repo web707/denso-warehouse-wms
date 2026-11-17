@@ -1,11 +1,14 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
-import { IsDateString, IsIn, IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsDateString, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 import { INSPECTION_TYPES, JUDGMENTS } from '../entities/inspection.entity';
 
 export class CreateInspectionDto {
   @ApiPropertyOptional({ example: 'INS-20261006-A1B2', description: 'Bỏ trống để hệ thống tự sinh' })
   @IsOptional() @IsString() inspectionId?: string;
 
+  @ApiPropertyOptional() @IsOptional() @IsUUID() partId?: string;
+
+  @ApiProperty({ example: 'A009' }) @IsString() productCode: string;
   @ApiProperty({ example: 'LOT-2026-001' }) @IsString() lotNumber: string;
   @ApiPropertyOptional() @IsOptional() @IsString() workOrderNumber?: string;
   @ApiPropertyOptional({ enum: INSPECTION_TYPES }) @IsOptional() @IsIn(INSPECTION_TYPES as unknown as string[]) inspectionType?: string;

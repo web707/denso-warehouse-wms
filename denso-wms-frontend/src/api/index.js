@@ -1,4 +1,5 @@
 import { request, raw } from './client';
+import { createInventoryTransaction } from './inventory';
 
 export const api = {
   auth: {
@@ -22,6 +23,13 @@ export const api = {
     list: (params = {}) => {
       const qs = new URLSearchParams(params).toString();
       return request(`/parts${qs ? `?${qs}` : ''}`);
+    },
+    dashboardSummary: async () => {
+      try {
+        return await request('/parts/dashboard-summary');
+      } catch {
+        return null;
+      }
     },
     create: (body) => request('/parts', { method: 'POST', body }),
     update: (id, body) => request(`/parts/${id}`, { method: 'PATCH', body }),
@@ -68,7 +76,40 @@ export const api = {
 
   inventory: {
     list: (params = {}) => { const qs = new URLSearchParams(params).toString(); return request(`/inventory/transactions${qs ? `?${qs}` : ''}`); },
-    create: (body) => request('/inventory/transactions', { method: 'POST', body }),
+    create: createInventoryTransaction,
+    transactionSummary: async (days = 30, zoneCode) => {
+      try {
+        const qs = new URLSearchParams({ days });
+        if (zoneCode) qs.set('zoneCode', zoneCode);
+        const res = await request(`/inventory/transaction-summary?${qs}`);
+        if (Array.isArray(res) && res.length > 0) return res;
+      } catch {}
+      try {
+        const txs = await request('/inventory/transactions?limit=200');
+        const items = Array.isArray(txs) ? txs : (txs?.items || []);
+        const dateMap = new Map();
+        const today = new Date();
+        for (let i = days - 1; i >= 0; i--) {
+          const d = new Date(today);
+          d.setDate(d.getDate() - i);
+          const dateStr = d.toISOString().slice(0, 10);
+          dateMap.set(dateStr, { date: dateStr, inbound: 0, outbound: 0, transfer: 0 });
+        }
+        for (const tx of items) {
+          const dateStr = String(tx.createdAt || tx.timestamp || '').slice(0, 10);
+          if (dateMap.has(dateStr)) {
+            const entry = dateMap.get(dateStr);
+            const qty = Number(tx.quantityPcs) || 1;
+            if (tx.type === 'inbound') entry.inbound += qty;
+            else if (tx.type === 'outbound') entry.outbound += qty;
+            else if (tx.type === 'transfer') entry.transfer += qty;
+          }
+        }
+        return Array.from(dateMap.values());
+      } catch {
+        return [];
+      }
+    },
     heatmap: (params = {}) => { const qs = new URLSearchParams(params).toString(); return request(`/inventory/heatmap${qs ? `?${qs}` : ''}`); },
   },
 
@@ -104,6 +145,17 @@ export const api = {
     create: (body) => request('/warehouse-zones', { method: 'POST', body }),
     update: (id, body) => request(`/warehouse-zones/${id}`, { method: 'PATCH', body }),
     remove: (id) => request(`/warehouse-zones/${id}`, { method: 'DELETE' }),
+  },
+
+  receiving: {
+    list: (params = {}) => {
+      const qs = new URLSearchParams(params).toString();
+      return request(`/receiving${qs ? `?${qs}` : ''}`);
+    },
+    summary: () => request('/receiving/summary'),
+    create: (body, key) => request('/receiving', { method: 'POST', body, headers: { 'Idempotency-Key': key } }),
+    get: (id) => request(`/receiving/${id}`),
+    approve: (id, body = {}) => request(`/receiving/${id}/approve`, { method: 'POST', body }),
   },
 
   imports: {

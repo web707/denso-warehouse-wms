@@ -7,6 +7,9 @@ import { Order } from '../../orders/entities/order.entity';
 
 @Entity('parts')
 export class Part extends BaseEntity {
+  @Column({ name: 'product_family', type: 'varchar', length: 40, nullable: true })
+  productFamily: string | null;
+
   @ManyToOne(() => Order, (o) => o.parts, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'order_id' })
   order: Order;
@@ -91,6 +94,15 @@ export class Part extends BaseEntity {
   @Index()
   @Column({ name: 'lot_number', type: 'varchar', nullable: true })
   lotNumber: string | null;
+
+  @Column({ name: 'lot_id', type: 'uuid', nullable: true })
+  lotId: string | null;
+
+  @Column({ name: 'quality_scope_id', type: 'uuid', nullable: true })
+  qualityScopeId: string | null;
+
+  @Column({ name: 'receiving_damaged', type: 'boolean', default: false })
+  receivingDamaged: boolean;
 
   // UOMCode: đơn vị đo (EA, KG, ROLL...)
   @Column({ name: 'uom_code', type: 'varchar', default: 'EA' })

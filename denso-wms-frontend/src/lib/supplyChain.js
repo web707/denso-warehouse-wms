@@ -41,7 +41,13 @@ export const JUDGMENT = {
   OK: { label: 'OK', tone: 'green' },
   NG: { label: 'NG', tone: 'red' },
   HOLD: { label: 'HOLD', tone: 'amber' },
+  AVAILABLE: { label: 'AVAILABLE', tone: 'green' },
+  BLOCKED: { label: 'BLOCKED', tone: 'red' },
+  EXPIRED: { label: 'EXPIRED', tone: 'red' },
+  REJECTED: { label: 'REJECTED', tone: 'red' },
 };
+
+export const isQcAvailable = judgment => judgment === 'OK' || judgment === 'AVAILABLE';
 
 export const SHIPMENT_STATUS = {
   RELEASED: { label: 'Chờ giao', tone: 'amber' },
@@ -72,9 +78,9 @@ export function workOrderProgress(wo) {
   };
 }
 
-/** Map lotNumber -> kết luận kiểm tra mới nhất ({ judgment, inspectionId, ... }). */
+/** Map lotId -> kết luận kiểm tra mới nhất ({ judgment, inspectionId, ... }). */
 export function lotStatusMap(list = []) {
-  return new Map(list.map((l) => [l.lotNumber, l]));
+  return new Map(list.filter((l) => l.lotId).map((l) => [l.qualityScopeId ?? l.lotId, l]));
 }
 
 /** Kiểm tra giá trị đo có nằm ngoài dung sai không (khớp quy tắc ở backend). */

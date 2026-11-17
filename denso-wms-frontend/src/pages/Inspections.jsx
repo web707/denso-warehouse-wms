@@ -1,3 +1,4 @@
+import { useStore } from '@/lib/store';
 import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
@@ -21,11 +22,16 @@ const JUDGMENT_OPTIONS = [
   { value: 'OK', label: 'OK — đạt' },
   { value: 'NG', label: 'NG — không đạt' },
   { value: 'HOLD', label: 'HOLD — giữ lại chờ xử lý' },
+  { value: 'AVAILABLE', label: 'AVAILABLE — đủ điều kiện' },
+  { value: 'BLOCKED', label: 'BLOCKED — chặn xuất' },
+  { value: 'EXPIRED', label: 'EXPIRED — quá hạn' },
+  { value: 'REJECTED', label: 'REJECTED — loại bỏ' },
 ];
 
 const FIELDS = [
   { type: 'section', label: 'Phiếu kiểm tra' },
   { key: 'inspectionId', label: 'Mã phiếu (InspectionId)', placeholder: 'Để trống để tự sinh' },
+  { key: 'productCode', label: 'SKU', required: true },
   { key: 'lotNumber', label: 'Lot Number', required: true, placeholder: 'LOT-2026-001' },
   { key: 'workOrderNumber', label: 'Lệnh sản xuất (WorkOrderNumber)', placeholder: 'WO-2026-0001' },
   { key: 'inspectionType', label: 'Loại kiểm tra', type: 'select', options: INSPECTION_TYPES },
@@ -45,7 +51,7 @@ const FIELDS = [
 ];
 
 const EMPTY = {
-  inspectionId: '', lotNumber: '', workOrderNumber: '', inspectionType: 'INCOMING', inspectionDate: '', inspectorId: '',
+  partId: '', inspectionId: '', productCode: '', lotNumber: '', workOrderNumber: '', inspectionType: 'INCOMING', inspectionDate: '', inspectorId: '',
   sampleSize: '', passQuantity: '', failQuantity: '0', defectCode: '', measuredValue1: '', upperTolerance: '', lowerTolerance: '',
   judgment: 'AUTO',
 };
@@ -68,6 +74,8 @@ function resolveJudgment(v) {
 function toBody(v) {
   return {
     ...(strOrNull(v.inspectionId) ? { inspectionId: v.inspectionId.trim() } : {}),
+    ...(v.partId && v.partId !== 'LOT' ? { partId: v.partId } : {}),
+    productCode: v.productCode.trim(),
     lotNumber: v.lotNumber.trim(),
     workOrderNumber: strOrNull(v.workOrderNumber),
     inspectionType: v.inspectionType,
@@ -113,6 +121,9 @@ function JudgmentHint({ values }) {
 }
 
 export default function Inspections() {
+  const { parts } = useStore();
+  const scopedParts = useMemo(() => [...new Map(parts.filter(part => part.qualityScopeId && !part.receivingDamaged && part.quantity > 0)
+    .map(part => [part.qualityScopeId, part])).values()], [parts]);
   const { data: rows = [], isLoading, isError, refetch } = useInspections();
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -138,7 +149,7 @@ export default function Inspections() {
     const q = search.trim().toLowerCase();
     return rows.filter((r) => (judgment === 'ALL' || r.judgment === judgment)
       && (type === 'ALL' || r.inspectionType === type)
-      && (!q || `${r.inspectionId} ${r.lotNumber} ${r.workOrderNumber || ''} ${r.defectCode || ''} ${r.inspectorId || ''}`.toLowerCase().includes(q)));
+      && (!q || `${r.inspectionId} ${r.lotNumber} ${r.productCode || ''} ${r.workOrderNumber || ''} ${r.defectCode || ''} ${r.inspectorId || ''}`.toLowerCase().includes(q)));
   }, [rows, judgment, type, search]);
 
   const initial = useMemo(() => toForm(editing), [editing]);
@@ -147,14 +158,20 @@ export default function Inspections() {
     const body = toBody(values);
     if (editing) await api.inspections.update(editing.id, body);
     else await api.inspections.create(body);
-    await qc.invalidateQueries({ queryKey: KEYS.inspections });
+    await Promise.all([
+        qc.invalidateQueries({ queryKey: KEYS.inspections }),
+        qc.invalidateQueries({ queryKey: ['dashboard', 'stock'] }),
+      ]);
     toast({ title: editing ? 'Đã cập nhật phiếu kiểm tra' : 'Đã lưu phiếu kiểm tra', description: `${body.lotNumber} · ${body.judgment}` });
   };
 
   const remove = async () => {
     try {
       await api.inspections.remove(toDelete.id);
-      await qc.invalidateQueries({ queryKey: KEYS.inspections });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: KEYS.inspections }),
+        qc.invalidateQueries({ queryKey: ['dashboard', 'stock'] }),
+      ]);
       toast({ title: 'Đã xóa phiếu kiểm tra', description: toDelete.inspectionId });
     } catch (e) {
       toast({ variant: 'destructive', title: 'Không xóa được', description: e.message });
@@ -233,7 +250,8 @@ export default function Inspections() {
                       <p className="text-xs text-slate-500 whitespace-nowrap">{fmtDate(r.inspectionDate, true)}</p>
                     </td>
                     <td className="px-3 py-3">
-                      <Link to={`/trace?lot=${encodeURIComponent(r.lotNumber)}`} className="text-indigo-600 hover:underline">{r.lotNumber}</Link>
+                      <Link to={`/trace?lot=${encodeURIComponent(r.lotNumber)}&sku=${encodeURIComponent(r.productCode || '')}`} className="text-indigo-600 hover:underline">{r.lotNumber}</Link>
+                      {r.requiresReinspection ? <p className="text-xs text-amber-700">Cần kiểm định lại · chưa xác định SKU</p> : <p className="text-xs text-slate-500">{r.productCode}</p>}
                       {r.workOrderNumber && <p className="text-xs text-slate-500">{r.workOrderNumber}</p>}
                     </td>
                     <td className="px-3 py-3"><Pill>{r.inspectionType}</Pill></td>
@@ -258,8 +276,9 @@ export default function Inspections() {
                     </td>
                     <td className="px-3 py-3 text-slate-600">{r.inspectorId || '—'}</td>
                     <td className="px-3 py-3 whitespace-nowrap text-right">
-                      <Button variant="ghost" size="icon" aria-label={`Sửa ${r.inspectionId}`} onClick={() => { setEditing(r); setDialogOpen(true); }}><Pencil className="w-4 h-4" /></Button>
-                      <Button variant="ghost" size="icon" aria-label={`Xóa ${r.inspectionId}`} onClick={() => setToDelete(r)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
+                      <Button variant="ghost" size="icon" disabled={r.requiresReinspection} aria-label={`Sửa ${r.inspectionId}`} onClick={() => { setEditing(r); setDialogOpen(true); }}><Pencil className="w-4 h-4" /></Button>
+                      <DocumentSourceButton kind="03-VT" reference={r.id}>In kiểm nghiệm</DocumentSourceButton>
+                      <Button variant="ghost" size="icon" disabled={r.requiresReinspection} aria-label={`Xóa ${r.inspectionId}`} onClick={() => setToDelete(r)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
                     </td>
                   </tr>
                 );
@@ -274,7 +293,13 @@ export default function Inspections() {
         onOpenChange={setDialogOpen}
         title={editing ? `Sửa phiếu ${editing.inspectionId}` : 'Thêm phiếu kiểm tra'}
         description="Số đạt + số lỗi không được vượt quá cỡ mẫu. Kết luận OK chỉ hợp lệ khi không có lỗi và giá trị đo nằm trong dung sai."
-        fields={FIELDS}
+        fields={editing ? FIELDS : [...FIELDS.slice(0, 3), {
+          key: 'partId', type: 'select', label: 'Phạm vi phiếu nhận',
+          help: 'Chọn PART nhận hàng để ghi kết luận riêng. SKU và số lô phải khớp.',
+          options: [{ value: 'LOT', label: 'Cả lô thông thường' }, ...scopedParts.map(part => ({
+            value: part.id, label: `${part.productCode} · ${part.lotNumber} · PO ${part.masterPo}`,
+          }))],
+        }, ...FIELDS.slice(3)]}
         initial={initial}
         onSubmit={save}
         submitLabel={editing ? 'Lưu thay đổi' : 'Lưu phiếu'}
@@ -290,3 +315,4 @@ export default function Inspections() {
     </div>
   );
 }
+import { DocumentSourceButton } from './Documents';

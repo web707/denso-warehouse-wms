@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
-import { WAREHOUSE_RACK } from '../packing/solver/rack-packer';
+import { rackSlotCartonCapacity, WAREHOUSE_RACK } from '../packing/solver/rack-packer';
+import { ContainerDims } from '../packing/domain/types';
 
 /**
  * Quy tắc nghiệp vụ thuần (không chạm database) cho giao dịch nhập/xuất/điều chuyển.
@@ -103,14 +104,36 @@ export function assertInboundLocation(
  * Số lượng/thùng/kg nếu có nhập phải bằng toàn bộ tồn; bỏ trống thì mặc định là toàn bộ.
  */
 export function planTransfer(stock: Stock, req: Amounts): Amounts {
+  const isPartial = (req.qty > 0 && req.qty < stock.quantityPcs)
+    || (req.cartons > 0 && req.cartons < stock.cartonCount)
+    || (req.weight > 0 && req.weight < stock.weightKg - EPS);
+
+  if (isPartial) {
+    if (req.qty > stock.quantityPcs || req.cartons > stock.cartonCount || req.weight > stock.weightKg + EPS) {
+      throw new BadRequestException({
+        code: 'TRANSFER_EXCEEDS_STOCK',
+        message: 'Số lượng điều chuyển một phần vượt tồn kho hiện tại của PART',
+      });
+    }
+    const transferQty = req.qty > 0 ? req.qty : (req.cartons > 0 ? Math.round(stock.quantityPcs * req.cartons / stock.cartonCount) : stock.quantityPcs);
+    const transferCartons = req.cartons > 0 ? req.cartons : (req.qty > 0 && stock.quantityPcs > 0 ? Math.floor(stock.cartonCount * req.qty / stock.quantityPcs) : stock.cartonCount);
+    const transferWeight = req.weight > 0 ? req.weight : (stock.quantityPcs > 0 ? Number((stock.weightKg * transferQty / stock.quantityPcs).toFixed(2)) : stock.weightKg);
+
+    return {
+      qty: transferQty,
+      cartons: transferCartons,
+      weight: transferWeight,
+    };
+  }
+
   const mismatch =
     (req.qty > 0 && req.qty !== stock.quantityPcs) ||
     (req.cartons > 0 && req.cartons !== stock.cartonCount) ||
     (req.weight > 0 && Math.abs(req.weight - stock.weightKg) > 0.01);
   if (mismatch) {
     throw new BadRequestException({
-      code: 'TRANSFER_PARTIAL_UNSUPPORTED',
-      message: `Điều chuyển chuyển toàn bộ PART (${stock.quantityPcs} cái, ${stock.cartonCount} thùng, ${fmtKg(stock.weightKg)}). Chuyển một phần chưa được hỗ trợ, hãy để trống số lượng hoặc nhập đúng toàn bộ`,
+      code: 'TRANSFER_EXCEEDS_STOCK',
+      message: `Số lượng điều chuyển vượt tồn hiện có (${stock.quantityPcs} cái, ${stock.cartonCount} thùng, ${fmtKg(stock.weightKg)})`,
     });
   }
   return { qty: stock.quantityPcs, cartons: stock.cartonCount, weight: stock.weightKg };
@@ -127,6 +150,19 @@ export interface LoadItem {
 export interface RackLimits {
   rackKg: number;
   rackCbm: number;
+}
+
+export function assertRackSlotFits(
+  part: { cartonLengthMm: number; cartonWidthMm: number; cartonHeightMm: number },
+  cartons: number,
+  slot: number | null,
+  rack: { containerType: Omit<ContainerDims, 'maxCbm' | 'maxPayloadKg'> },
+): void {
+  if (slot === null || cartons <= 0) return;
+  const capacity = rackSlotCartonCapacity(part, { ...rack.containerType, maxCbm: Infinity, maxPayloadKg: Infinity }, slot);
+  if (cartons > capacity) {
+    throw new BadRequestException({ code: 'RACK_SLOT_CARTON_CAPACITY', message: `Ô ${slotName(slot)} chỉ xếp được ${capacity} thùng theo kích thước thực tế` });
+  }
 }
 
 /** Giới hạn của một kệ: tải trọng không vượt mức chung của kho, thể tích theo loại kệ. */

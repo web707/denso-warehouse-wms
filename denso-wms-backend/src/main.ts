@@ -11,8 +11,23 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
 async function bootstrap() {
+  if (process.env.WMS_DEMO_MODE === 'true'
+    && (process.env.DB_NAME !== 'wms_dashboard_demo_test' || process.env.NODE_ENV === 'production')) {
+    throw new Error('Demo mode requires its isolated QA database and a non-production process.');
+  }
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
+
+  const trustProxy = config.get<string>('trustProxy');
+  if (trustProxy && trustProxy !== 'false') {
+    const expressApp = app.getHttpAdapter().getInstance();
+    if (trustProxy === 'true') {
+      expressApp.set('trust proxy', true);
+    } else {
+      const parsedNum = Number(trustProxy);
+      expressApp.set('trust proxy', isNaN(parsedNum) ? trustProxy : parsedNum);
+    }
+  }
 
   app.use(helmet());
   app.use(compression());
@@ -22,7 +37,7 @@ async function bootstrap() {
     origin: allowedOrigins && allowedOrigins.length > 0 && allowedOrigins[0] !== '*' ? allowedOrigins : true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'Idempotency-Key'],
   });
   app.setGlobalPrefix('api');
 
@@ -47,7 +62,7 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
 
   const port = config.get<number>('port') ?? 5001;
-  await app.listen(port, '0.0.0.0');
+  await app.listen(port, '127.0.0.1');
   // eslint-disable-next-line no-console
   console.log(`MASAN WMS listening on http://localhost:${port}/api (docs at /api/docs)`);
 }

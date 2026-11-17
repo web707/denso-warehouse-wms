@@ -42,6 +42,7 @@ function Carton({ placement, color, isSelected, isFaded, onSelectSlot }) {
   const p = placement;
   const position = [mmToM(p.xMm + p.dxMm / 2), mmToM(p.zMm + p.dzMm / 2), mmToM(p.yMm + p.dyMm / 2)];
   const size = [mmToM(p.dxMm), mmToM(p.dzMm), mmToM(p.dyMm)];
+  const baseColor = color || p.colorHex || '#0f766e';
   return <mesh
     position={position}
     castShadow={!isFaded}
@@ -50,14 +51,18 @@ function Carton({ placement, color, isSelected, isFaded, onSelectSlot }) {
   >
     <boxGeometry args={size} />
     <meshStandardMaterial
-      color={isSelected ? (color || p.colorHex || '#0f766e') : color || p.colorHex || '#0f766e'}
-      transparent={isFaded}
-      opacity={isFaded ? 0.11 : 1}
+      color={isSelected ? '#ea580c' : baseColor}
+      transparent={true}
+      opacity={isFaded ? 0.06 : 1}
       depthWrite={!isFaded}
-      metalness={isSelected ? 0.09 : 0.025}
-      roughness={isSelected ? 0.52 : 0.75}
+      metalness={isSelected ? 0.2 : 0.025}
+      roughness={isSelected ? 0.35 : 0.75}
     />
-    {(!isFaded || isSelected) && <Edges color={isSelected ? '#0f172a' : '#334155'} threshold={24} />}
+    {isSelected ? (
+      <Edges color="#4f46e5" lineWidth={3} threshold={15} />
+    ) : !isFaded ? (
+      <Edges color="#334155" threshold={24} />
+    ) : null}
   </mesh>;
 }
 
@@ -80,15 +85,42 @@ function SlotCell({ slot, metric, selected, onSelect, onHover, hasSelection }) {
       onClick={(event) => { event.stopPropagation(); onSelect?.(slot.code); }}
     >
       <boxGeometry args={[bay * 0.96, level * 0.91, depth * 0.95]} />
-      <meshStandardMaterial color={color} transparent opacity={selected ? 0.115 : hovered ? 0.075 : 0.004} depthWrite={false} />
-      {(selected || hovered || status === 'overload') && <Edges color={selected ? '#4f46e5' : color} />}
+      <meshStandardMaterial
+        color={color}
+        transparent={true}
+        opacity={selected ? 0.22 : hovered ? 0.08 : 0.003}
+        depthWrite={false}
+      />
+      {(selected || hovered || status === 'overload') && (
+        <Edges color={selected ? '#4f46e5' : color} lineWidth={selected ? 2.5 : 1} />
+      )}
     </mesh>
+    {/* Nhãn mã ô gắn ở mặt trước dầm kệ, không bao giờ bị thùng hàng che khuất */}
     <Text
-      position={[x, (slot.level - 1) * level + 0.105, -0.08]}
-      fontSize={0.12}
+      position={[x, (slot.level - 1) * level + 0.07, depth + 0.015]}
+      fontSize={0.11}
       anchorX="center"
-      color={selected ? '#4338ca' : hasSelection ? '#94a3b8' : occupied ? '#166534' : '#475569'}
+      anchorY="bottom"
+      color={selected ? '#312e81' : hasSelection ? '#64748b' : occupied ? '#15803d' : '#334155'}
+      outlineWidth={0.012}
+      outlineColor={selected ? '#e0e7ff' : '#ffffff'}
     >{slot.code}</Text>
+
+    {/* Bảng chỉ báo nổi trực quan ngay trên ô được chọn */}
+    {selected && (
+      <group position={[x, slot.level * level + 0.12, depth / 2]}>
+        <Text
+          fontSize={0.14}
+          anchorX="center"
+          anchorY="middle"
+          color="#ffffff"
+          outlineWidth={0.028}
+          outlineColor="#4338ca"
+        >
+          {`▶ ${slot.code} ◀`}
+        </Text>
+      </group>
+    )}
   </group>;
 }
 

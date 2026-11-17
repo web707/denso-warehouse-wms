@@ -1,7 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsDateString, IsIn, IsInt, IsOptional, IsPositive, IsString, IsUUID, Min, Max } from 'class-validator';
+import { RACK_PRODUCT_FAMILIES } from '../../inventory/rack-product-family.rules';
 
 export class CreatePartDto {
+  @ApiPropertyOptional({ enum: RACK_PRODUCT_FAMILIES })
+  @IsOptional() @IsIn(RACK_PRODUCT_FAMILIES) productFamily?: string | null;
+
   @ApiPropertyOptional({ description: 'Rack selected in new-part form. Atomic create + placement.' })
   @IsOptional() @IsUUID() rackId?: string;
   @ApiPropertyOptional({ description: '0-based slot index, S01=0' })

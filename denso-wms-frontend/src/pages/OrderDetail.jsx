@@ -187,9 +187,9 @@ export default function OrderDetail() {
                   <td className="px-4 py-3 text-slate-600">{p.productCode}</td>
                   <td className="px-4 py-3 text-slate-600 tabular-nums whitespace-nowrap">
                     {p.lotNumber || '—'}
-                    {p.lotNumber && lotQuality.get(p.lotNumber) && (
-                      <Pill tone={JUDGMENT[lotQuality.get(p.lotNumber).judgment].tone} className="ml-2" title={`Kiểm tra ${lotQuality.get(p.lotNumber).inspectionType}`}>{lotQuality.get(p.lotNumber).judgment}</Pill>
-                    )}
+                    {lotQuality.has(p.qualityScopeId ?? p.lotId) ? (
+                      <Pill tone={JUDGMENT[lotQuality.get(p.qualityScopeId ?? p.lotId).judgment]?.tone || 'red'} className="ml-2" title={`Kiểm tra ${lotQuality.get(p.qualityScopeId ?? p.lotId).inspectionType}`}>{lotQuality.get(p.qualityScopeId ?? p.lotId).judgment}</Pill>
+                    ) : (p.quantity > 0 || p.cartons > 0 || p.weight > 0) && <Pill tone="amber" className="ml-2">Chờ QC</Pill>}
                   </td>
                   <td className="px-4 py-3">
                     <Badge variant="outline" className="text-xs font-semibold">{p.divisionCode || '—'}</Badge>
@@ -210,7 +210,7 @@ export default function OrderDetail() {
                       <SelectContent>
                         <SelectItem value="__none__">— Chưa phân bổ —</SelectItem>
                         {orderRacks.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                          <SelectItem key={c.id} value={c.id}>{c.zoneCode} / {c.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>

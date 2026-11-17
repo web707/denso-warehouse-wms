@@ -1,99 +1,324 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Text, Edges } from '@react-three/drei';
-import { Boxes, CheckCircle2, MousePointerClick } from 'lucide-react';
-import { rackInventoryView, partDisplayColor } from '@/lib/viz/rackInventoryView';
-import { familyLabel, FAMILY_COLORS } from '@/lib/rackProductFamily';
+// WarehouseScene3D.jsx
+// Sơ đồ kho 3D & Trung tâm Điều hành - Unified Industrial 3D Visualizer for Warehouse Zones, Racks & Slots
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Canvas, useThree } from '@react-three/fiber';
+import { OrbitControls, Text } from '@react-three/drei';
+import { RotateCcw, Eye, ArrowRight, Layers, Activity, Box, Compass } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import SharedRackGeometry from '@/components/viz/SharedRackGeometry';
+import InventoryVisualization from '@/components/viz/InventoryVisualization';
+import {
+  SHARED_WAREHOUSE_COORDINATES,
+  SHARED_RACK_SPEC,
+  buildUnifiedWarehouseModel
+} from '@/lib/viz/warehouseLayoutAdapter';
 
-const W=2.32, H=2.15, D=0.8;
-const COLS=5, COL_GAP=3.1, ROW_GAP=2.8;
-const statusColors={empty:'#94a3b8',active:'#10b981',near:'#f59e0b',full:'#6366f1',overload:'#ef4444'};
-const statusLabels={empty:'Kệ trống',active:'Đang sử dụng',near:'Gần đầy',full:'Đầy',overload:'Quá tải thực tế'};
-function Beam({pos,size,color='#1d4ed8',dimmed=false}) {return <mesh position={pos} castShadow={!dimmed} receiveShadow><boxGeometry args={size}/><meshStandardMaterial color={color} roughness={0.42} metalness={0.35} transparent={dimmed} opacity={dimmed ? 0.22 : 1} depthWrite={!dimmed}/></mesh>;}
-function occupiedPositions(parts=[]) {
-  const { slots } = rackInventoryView(parts);
-  return slots.filter((s)=>s.placements.length).map((s)=>({ slot:s.index,part:parts.find((p)=>p.id===s.placements[0].partId) }));
-}
-function RackVisual({rack,position,selected,highlighted,dimmed,onSelect,onHover}) {
-  const [hovered,setHovered]=useState(false);
-  const busy=occupiedPositions(rack.rackParts);
-  const frameColor=selected?'#4338ca':highlighted?'#0891b2':'#1d4ed8';
-  const familyColor=FAMILY_COLORS[rack.family]||'#64748b';
-  const statusColor=statusColors[rack.status]||statusColors.empty;
-  const beams=[];
-  for(let b=0;b<=5;b++)for(const z of [-D/2,D/2])beams.push(<Beam key={`post${b}${z}`} pos={[-W/2+b*W/5,H/2,z]} size={[0.047,H,0.047]} color={frameColor} dimmed={dimmed}/>);
-  for(let l=0;l<=4;l++)for(const z of [-D/2,D/2])beams.push(<Beam key={`front${l}${z}`} pos={[0,l*H/4,z]} size={[W,0.057,0.055]} color={l%2?'#f97316':'#fb923c'} dimmed={dimmed}/>);
-  return <group position={position}>
-    <mesh position={[0,H/2,0]} onPointerOver={(e)=>{e.stopPropagation();setHovered(true);onHover?.(rack.id);}} onPointerOut={(e)=>{e.stopPropagation();setHovered(false);onHover?.(null);}} onClick={(e)=>{e.stopPropagation();onSelect?.(rack.id);}}>
-      <boxGeometry args={[W*1.05,H*1.04,D*1.2]}/>
-      <meshStandardMaterial color={selected?'#6366f1':statusColor} transparent opacity={dimmed?0.012:selected?0.18:hovered?0.10:0.025} depthWrite={false}/>
-    </mesh>
-    {beams}
-    {Array.from({length:4},(_,l)=><Beam key={`shelf${l}`} pos={[0,l*H/4+0.03,0]} size={[W,0.035,D]} color="#64748b" dimmed={dimmed}/>)}
-    {busy.map(({slot,part})=>{
-      const bay=slot%5,level=Math.floor(slot/5);
-      const x=-W/2+(bay+.5)*W/5,y=(level+.52)*H/4;
-      return <group key={`${slot}-${part.id}`}>
-        <mesh castShadow receiveShadow position={[x,y,0]} onClick={(e)=>{e.stopPropagation();onSelect?.(rack.id);}}>
-          <boxGeometry args={[W/5*.80,H/4*.72,D*.72]}/>
-          <meshStandardMaterial color={FAMILY_COLORS[rack.family] || partDisplayColor(part)} roughness={0.68} transparent={dimmed} opacity={dimmed?0.13:1} depthWrite={!dimmed}/>{!dimmed&&<Edges scale={1.005} color="#1e293b" threshold={30}/>}
-        </mesh>
-        <mesh position={[x,y-H/4*.33,0]} receiveShadow><boxGeometry args={[W/5*.84,.025,D*.78]}/><meshStandardMaterial color="#d6b98c" roughness={.95} transparent={dimmed} opacity={dimmed?0.2:1}/></mesh>
-      </group>;
-    })}
-    <Text position={[0,H+.22,0]} color={dimmed?'#94a3b8':selected?'#4338ca':'#0f172a'} fontSize={.23} anchorX="center" anchorY="middle">{rack.name}</Text>
-    <Text position={[0,H+.43,0]} color={dimmed?'#94a3b8':familyColor} fontSize={.12} maxWidth={W*1.4} anchorX="center" anchorY="middle">{familyLabel(rack.family)}</Text>
-    <Text position={[0,H+.58,0]} color={dimmed?'#94a3b8':rack.status==='overload'?'#dc2626':'#0f766e'} fontSize={.105} anchorX="center" anchorY="middle">{`${busy.length}/20 ô · ${rack.partCount||0} PART`}</Text>
-    {/* Details use a fixed top-right HUD instead of covering rack geometry. */}
-  </group>;
-}
-function WarehouseShell({zoneCode}) {
-  return <group>
-    <mesh rotation={[-Math.PI/2,0,0]} position={[0,-.035,0]} receiveShadow><planeGeometry args={[19,15]}/><meshStandardMaterial color="#edf2fc" roughness={.92}/></mesh>
-    <gridHelper args={[19,38,'#cbd5e1','#e2e8f0']} position={[0,0,0]}/>
-    <mesh position={[0,2.5,-7.2]} receiveShadow><boxGeometry args={[19,5,.08]}/><meshStandardMaterial color="#f8fafc" roughness={.8}/></mesh>
-    <mesh position={[-9.4,2.5,0]} receiveShadow><boxGeometry args={[.08,5,15]}/><meshStandardMaterial color="#f8fafc" roughness={.8}/></mesh>
-    <Text position={[0,4.25,-7.1]} fontSize={.38} anchorX="center" color="#0f766e">MASAN CONSUMER · {zoneCode}</Text>
-  </group>;
+const CAMERA_DEFAULT = [0, 8.5, 9.5];
+const TARGET_DEFAULT = [0, 1.0, -2.5];
+
+function WarehouseCamera({ selectedRackPos, selectedSlotPos, cameraPreset = 'overview', resetKey }) {
+  const { camera } = useThree();
+  const controlsRef = useRef();
+
+  useLayoutEffect(() => {
+    if (!controlsRef.current) return;
+
+    if (cameraPreset === 'front') {
+      // 2D elevation / Front elevation view
+      controlsRef.current.target.set(0, 1.1, -3.0);
+      camera.position.set(0, 1.2, 5.0);
+      controlsRef.current.update();
+    } else if (cameraPreset === 'dock') {
+      // Dock / Receiving area
+      controlsRef.current.target.set(0, 0.2, 1.8);
+      camera.position.set(0, 4.0, 7.0);
+      controlsRef.current.update();
+    } else if (selectedSlotPos) {
+      // Tight zoom on selected slot
+      controlsRef.current.target.set(selectedSlotPos[0], selectedSlotPos[1], selectedSlotPos[2]);
+      camera.position.set(selectedSlotPos[0], selectedSlotPos[1] + 1.2, selectedSlotPos[2] + 2.8);
+      controlsRef.current.update();
+    } else if (selectedRackPos) {
+      // Smoothly look at the selected rack
+      controlsRef.current.target.set(selectedRackPos[0], 1.1, selectedRackPos[2]);
+      camera.position.set(selectedRackPos[0], 4.2, selectedRackPos[2] + 5.2);
+      controlsRef.current.update();
+    } else {
+      // Default overview
+      controlsRef.current.target.set(...TARGET_DEFAULT);
+      camera.position.set(...CAMERA_DEFAULT);
+      controlsRef.current.update();
+    }
+  }, [selectedRackPos, selectedSlotPos, cameraPreset, resetKey, camera]);
+
+  return (
+    <OrbitControls
+      ref={controlsRef}
+      makeDefault
+      enableDamping
+      minDistance={2}
+      maxDistance={40}
+      maxPolarAngle={Math.PI / 2.02}
+    />
+  );
 }
 
-export default function WarehouseScene3D({racks=[],selectedRackId,highlightedRackIds,onSelectRack,zoneCode='ZONE-A',className=''}) {
-  const [recent,setRecent]=useState(null);
-  const [hoveredRackId,setHoveredRackId]=useState(null);
-  const summary=useMemo(()=>({used:racks.reduce((n,r)=>n+(r.usedSlots||0),0),overloaded:racks.filter((r)=>r.status==='overload').length}),[racks]);
-  useEffect(()=>{
-    let timer;
-    const onCommit=()=>{setRecent(Date.now());clearTimeout(timer);timer=setTimeout(()=>setRecent(null),2800);};
-    window.addEventListener('wms-inventory-committed',onCommit);
-    return ()=>{window.removeEventListener('wms-inventory-committed',onCommit);clearTimeout(timer);};
-  },[]);
-  const layout=useMemo(()=>racks.slice(0,20).map((rack,i)=>({...rack,position:[(i%COLS-2)*COL_GAP,0,(Math.floor(i/COLS)-1.5)*ROW_GAP]})),[racks]);
-  const focusRack=layout.find((rack)=>rack.id===(selectedRackId||hoveredRackId));
-  return <div className={`relative w-full rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 ${className}`} style={{minHeight:610,height:610}}>
-    <div className="absolute left-3 top-3 z-10 flex items-center gap-2 bg-white/95 border border-slate-200 rounded-lg px-3 py-2 shadow-sm text-xs text-slate-700">
-      <Boxes className="w-4 h-4 text-indigo-600"/><b>{racks.length} kệ · {summary.used} ô có vị trí</b>
-      {recent && <span className="ml-2 flex items-center gap-1 text-emerald-700"><CheckCircle2 className="w-4 h-4"/> Đã đồng bộ</span>}
-    </div>
-    {focusRack && <div className="pointer-events-none absolute top-3 right-3 z-10 max-w-[210px] rounded-xl border border-slate-200 bg-white/95 px-3 py-2.5 text-xs text-slate-700 shadow-sm">
-      <p className="font-bold text-sm">{focusRack.zoneCode} · {focusRack.name}</p>
-      <p className="font-semibold mt-1 text-indigo-700">{familyLabel(focusRack.family)}</p>
-      <p className="text-slate-500 mt-1">{focusRack.usedSlots || 0}/20 ô · {focusRack.partCount || 0} PART</p>
-      <p className="mt-0.5">{Number(focusRack.totalWeight || 0).toLocaleString('vi-VN')} kg</p>
-    </div>}
-    <Canvas shadows dpr={[1,1.5]} camera={{position:[12,10.7,16],fov:40}}>
-      <color attach="background" args={['#f2f6ff']}/>
-      <ambientLight intensity={.86}/><hemisphereLight args={['#fff','#dbeafe',.6]}/>
-      <directionalLight position={[9,13,9]} intensity={1.18} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024}/>
-      <directionalLight position={[-8,8,-5]} intensity={.35}/>
-      <WarehouseShell zoneCode={zoneCode}/>
-      {layout.map((rack)=><RackVisual key={rack.id} rack={rack} position={rack.position} selected={rack.id===selectedRackId} highlighted={highlightedRackIds?.has(rack.id)} dimmed={Boolean(selectedRackId&&rack.id!==selectedRackId)} onHover={setHoveredRackId} onSelect={onSelectRack}/>) }
-      <OrbitControls makeDefault enableDamping dampingFactor={0.08} target={[0,1.3,0]} minDistance={7} maxDistance={31} maxPolarAngle={Math.PI/2.05}/>
-    </Canvas>
-    <div className="absolute bottom-3 left-3 right-3 z-10 flex flex-wrap justify-between items-center gap-2 rounded-lg bg-white/95 border border-slate-200 px-3 py-2 text-[11px] text-slate-600 shadow-sm">
-      <div className="flex flex-wrap gap-x-3 gap-y-1 items-center">
-        {Object.entries(statusLabels).filter(([key])=>key!=='overload'||summary.overloaded>0).map(([key,label])=><span key={key} className="inline-flex gap-1.5 items-center"><i className="inline-block w-2.5 h-2.5 rounded-sm" style={{background:statusColors[key]}}/>{label}</span>)}
+export default function WarehouseScene3D({
+  racks = [],
+  parts = [],
+  selectedRackId,
+  selectedSlotIndex = null,
+  onSelectRack,
+  onSelectSlot,
+  quality = 'normal',
+  zoneCode = 'ZONE-A',
+  totalRacks,
+  viewMode = 'qc', // 'qc' | 'heatmap' | 'space'
+  onChangeViewMode,
+  tasksBySlot = null
+}) {
+  const navigate = useNavigate();
+  const [reset, setReset] = useState(0);
+  const [showWalls, setShowWalls] = useState(true);
+  const [cameraPreset, setCameraPreset] = useState('overview');
+
+  // Build unified warehouse model
+  const qualityMap = quality instanceof Map ? quality : new Map();
+  const model = useMemo(
+    () => buildUnifiedWarehouseModel(racks, parts, qualityMap, zoneCode),
+    [racks, parts, qualityMap, zoneCode]
+  );
+
+  const selectedRackModel = model.racks.find(r => r.rackId === selectedRackId);
+  const selectedRackPos = selectedRackModel ? selectedRackModel.position : null;
+
+  // Selected slot 3D position if available
+  const selectedSlotPos = useMemo(() => {
+    if (!selectedRackModel || selectedSlotIndex === null || selectedSlotIndex === undefined) return null;
+    const slotModel = selectedRackModel.slots.find(s => s.index === selectedSlotIndex);
+    return slotModel ? slotModel.restPosition : null;
+  }, [selectedRackModel, selectedSlotIndex]);
+
+  return (
+    <div className="relative min-w-0 overflow-hidden rounded-xl border border-[#243449] bg-[#0b1320]">
+      {/* Top Header Controls Bar */}
+      <div className="absolute inset-x-3 top-3 z-10 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+        {/* Left Badges & Mode Switch */}
+        <div className="flex flex-wrap items-center gap-2 pointer-events-auto">
+          <span className="rounded-md border border-[#243449] bg-[#131f33]/90 px-3 py-1.5 text-xs font-semibold text-[#f8fafc] shadow-sm backdrop-blur">
+            {zoneCode} · {model.totalRacks} Kệ · {model.totalUsedSlots}/{model.totalSlots} Ô đang dùng
+          </span>
+
+          {/* View Mode Switcher Pills */}
+          <div className="inline-flex rounded-lg border border-[#243449] bg-[#131f33]/90 p-0.5 shadow-sm backdrop-blur">
+            <button
+              type="button"
+              onClick={() => onChangeViewMode?.('qc')}
+              className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition ${
+                viewMode === 'qc' ? 'bg-primary text-primary-foreground shadow' : 'text-[#94a3b8] hover:text-white'
+              }`}
+              title="Chế độ hiển thị: Trạng thái kiểm định chất lượng (QC)"
+            >
+              <Activity className="size-3" /> QC
+            </button>
+            <button
+              type="button"
+              onClick={() => onChangeViewMode?.('heatmap')}
+              className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition ${
+                viewMode === 'heatmap' ? 'bg-purple-600 text-white shadow' : 'text-[#94a3b8] hover:text-white'
+              }`}
+              title="Chế độ hiển thị: Bản đồ nhiệt mật độ tồn kho (Heatmap)"
+            >
+              <Layers className="size-3" /> Mật độ tồn
+            </button>
+            <button
+              type="button"
+              onClick={() => onChangeViewMode?.('space')}
+              className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition ${
+                viewMode === 'space' ? 'bg-amber-600 text-white shadow' : 'text-[#94a3b8] hover:text-white'
+              }`}
+              title="Chế độ hiển thị: Tỷ lệ sử dụng dung lượng & tải trọng"
+            >
+              <Box className="size-3" /> Dung lượng
+            </button>
+          </div>
+        </div>
+
+        {/* Right Controls */}
+        <div className="flex flex-wrap items-center gap-2 pointer-events-auto">
+          {/* Camera Quick Angles */}
+          <div className="hidden sm:inline-flex rounded-lg border border-[#243449] bg-[#131f33]/90 p-0.5 text-xs text-[#94a3b8] shadow-sm backdrop-blur">
+            <button
+              type="button"
+              onClick={() => { setCameraPreset('overview'); setReset(v => v + 1); }}
+              className={`rounded px-2 py-1 transition ${cameraPreset === 'overview' ? 'bg-[#1e2f47] text-white' : 'hover:text-white'}`}
+            >
+              Toàn cảnh
+            </button>
+            <button
+              type="button"
+              onClick={() => { setCameraPreset('front'); setReset(v => v + 1); }}
+              className={`rounded px-2 py-1 transition ${cameraPreset === 'front' ? 'bg-[#1e2f47] text-white' : 'hover:text-white'}`}
+            >
+              Mặt đứng 2D
+            </button>
+            <button
+              type="button"
+              onClick={() => { setCameraPreset('dock'); setReset(v => v + 1); }}
+              className={`rounded px-2 py-1 transition ${cameraPreset === 'dock' ? 'bg-[#1e2f47] text-white' : 'hover:text-white'}`}
+            >
+              Khu tiếp nhận
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowWalls(v => !v)}
+            className="rounded-md border border-[#243449] bg-[#131f33]/90 px-2.5 py-1.5 text-xs text-[#94a3b8] hover:text-white shadow-sm backdrop-blur"
+          >
+            {showWalls ? 'Ẩn tường' : 'Hiện tường'}
+          </button>
+
+          {selectedRackId && (
+            <button
+              type="button"
+              className="flex items-center gap-1.5 rounded-md border border-primary/50 bg-primary/20 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/30 shadow-sm backdrop-blur"
+              onClick={() => navigate(`/supply-chain-3d?rack=${encodeURIComponent(selectedRackModel?.name || '')}`)}
+              title="Chuyển sang xem Hoạt cảnh 3D mô phỏng của kệ này"
+            >
+              Hành trình 3D (Mô phỏng) <ArrowRight size={13} />
+            </button>
+          )}
+
+          <button
+            type="button"
+            className="flex min-h-8 items-center gap-1.5 rounded-md border border-[#243449] bg-[#131f33]/90 px-2.5 py-1.5 text-xs text-[#f3f6fc] hover:bg-[#1e2d42] shadow-sm backdrop-blur"
+            onClick={() => { setCameraPreset('overview'); setReset(v => v + 1); }}
+            title="Đặt lại camera về góc nhìn toàn cảnh"
+          >
+            <RotateCcw size={13} /> Đặt lại góc
+          </button>
+        </div>
       </div>
-      <span className="hidden sm:flex items-center gap-1 text-slate-500"><MousePointerClick className="w-3.5 h-3.5"/> Click kệ · kéo xoay · cuộn zoom</span>
+
+      {/* 3D Viewport */}
+      <div className="h-[56dvh] min-h-[420px] md:h-[clamp(480px,65dvh,750px)]" aria-label="Mô hình 3D của Zone">
+        <Canvas
+          key={`${zoneCode}-${reset}-${cameraPreset}`}
+          dpr={[1, 1.5]}
+          camera={{ position: CAMERA_DEFAULT, fov: 42 }}
+          fallback={<p className="p-12 text-sm text-white">WebGL không khả dụng. Chọn kệ trong danh sách bên dưới.</p>}
+        >
+          <color attach="background" args={['#0a101d']} />
+          <ambientLight intensity={1.3} />
+          <directionalLight position={[8, 12, 10]} intensity={2.0} />
+          <directionalLight position={[-8, 6, -5]} intensity={0.9} />
+
+          {/* Warehouse Floor */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, -1.0]}>
+            <planeGeometry args={[18, 12]} />
+            <meshStandardMaterial color="#111c2e" roughness={0.9} />
+          </mesh>
+          <gridHelper position={[0, -0.015, -1.0]} args={[18, 18, '#243449', '#162235']} />
+
+          {/* Yellow Safety Aisle Guide Line */}
+          <mesh position={[0, -0.005, SHARED_WAREHOUSE_COORDINATES.mainAisleZ]}>
+            <boxGeometry args={[11.0, 0.005, 0.08]} />
+            <meshBasicMaterial color="#eab308" />
+          </mesh>
+
+          {/* Warehouse Enclosure Walls (optional toggle) */}
+          {showWalls && (
+            <group>
+              {/* Back wall */}
+              <mesh position={[0, 2.0, SHARED_WAREHOUSE_COORDINATES.backWallZ]}>
+                <boxGeometry args={[18, 4.0, 0.15]} />
+                <meshStandardMaterial color="#162235" />
+              </mesh>
+              {/* Left wall */}
+              <mesh position={[SHARED_WAREHOUSE_COORDINATES.leftWallX, 2.0, -1.0]}>
+                <boxGeometry args={[0.15, 4.0, 12]} />
+                <meshStandardMaterial color="#162235" />
+              </mesh>
+              {/* Right wall */}
+              <mesh position={[SHARED_WAREHOUSE_COORDINATES.rightWallX, 2.0, -1.0]}>
+                <boxGeometry args={[0.15, 4.0, 12]} />
+                <meshStandardMaterial color="#162235" />
+              </mesh>
+            </group>
+          )}
+
+          {/* Staging & Dock Zones with 100% Vietnamese 3D Text */}
+          {[-3.5, 0.0, 3.5].map((x, i) => (
+            <group key={`dock:${x}`} position={[x, -0.008, 1.8]}>
+              <mesh>
+                <boxGeometry args={[2.8, 0.01, 1.4]} />
+                <meshStandardMaterial color={['#172e3d', '#1e3847', '#172e3d'][i]} />
+              </mesh>
+              <Text position={[0, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]} fontSize={0.14} color="#94a3b8">
+                {['KHU VỰC TIẾP NHẬN HÀNG', 'TRẠM KIỂM ĐỊNH CHẤT LƯỢNG (QC)', 'KHU VỰC SOẠN & ĐÓNG GÓI'][i]}
+              </Text>
+            </group>
+          ))}
+
+          {/* Render All Racks and Their Inventory */}
+          {model.racks.map(rackModel => (
+            <group key={rackModel.rackId}>
+              <SharedRackGeometry
+                rack={rackModel}
+                position={rackModel.position}
+                selected={rackModel.rackId === selectedRackId}
+                muted={!!selectedRackId && rackModel.rackId !== selectedRackId}
+                onSelect={onSelectRack}
+                highlightSlotIndex={rackModel.rackId === selectedRackId ? selectedSlotIndex : null}
+              />
+              <InventoryVisualization
+                rack={rackModel}
+                rackPosition={rackModel.position}
+                onSelectSlot={onSelectSlot || onSelectRack}
+                selectedSlotIndex={rackModel.rackId === selectedRackId ? selectedSlotIndex : null}
+                viewMode={viewMode}
+                tasksBySlot={tasksBySlot}
+              />
+            </group>
+          ))}
+
+          {/* Camera Controller */}
+          <WarehouseCamera
+            selectedRackPos={selectedRackPos}
+            selectedSlotPos={selectedSlotPos}
+            cameraPreset={cameraPreset}
+            resetKey={reset}
+          />
+        </Canvas>
+      </div>
+
+      {/* Bottom Footer Legend (Context-aware based on viewMode) */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 border-t border-[#243449] bg-[#0f172a] px-3 py-2 text-[11px] text-[#94a3b8]">
+        {viewMode === 'heatmap' ? (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span className="flex items-center"><i className="mr-1.5 inline-block size-2.5 rounded-sm bg-[#06b6d4]" />Mật độ thấp (&lt; 200 đv)</span>
+            <span className="flex items-center"><i className="mr-1.5 inline-block size-2.5 rounded-sm bg-[#10b981]" />Mật độ vừa (200 - 500 đv)</span>
+            <span className="flex items-center"><i className="mr-1.5 inline-block size-2.5 rounded-sm bg-[#a855f7]" />Mật độ cao (&gt; 500 đv)</span>
+            <span className="flex items-center"><i className="mr-1.5 inline-block size-2.5 rounded-sm border border-[#475569] bg-transparent" />Ô trống khả dụng</span>
+          </div>
+        ) : viewMode === 'space' ? (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span className="flex items-center"><i className="mr-1.5 inline-block size-2.5 rounded-sm bg-[#3b82f6]" />Tải nhẹ (&lt; 40%)</span>
+            <span className="flex items-center"><i className="mr-1.5 inline-block size-2.5 rounded-sm bg-[#f59e0b]" />Tải trung bình (40 - 75%)</span>
+            <span className="flex items-center"><i className="mr-1.5 inline-block size-2.5 rounded-sm bg-[#ef4444]" />Tải nặng (&gt; 75%)</span>
+            <span className="flex items-center"><i className="mr-1.5 inline-block size-2.5 rounded-sm border border-[#475569] bg-transparent" />Ô chưa sử dụng</span>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span className="flex items-center"><i className="mr-1.5 inline-block size-2.5 rounded-sm bg-[#22c55e]" />Đạt chuẩn QC (Sẵn sàng xuất)</span>
+            <span className="flex items-center"><i className="mr-1.5 inline-block size-2.5 rounded-sm bg-[#f59e0b]" />Chờ kiểm định (Tạm giữ / HOLD)</span>
+            <span className="flex items-center"><i className="mr-1.5 inline-block size-2.5 rounded-sm bg-[#ef4444]" />Lỗi kiểm định (Bị chặn / BLOCKED)</span>
+            <span className="flex items-center"><i className="mr-1.5 inline-block size-2.5 rounded-sm bg-[#c8a575]" />Pallet gỗ công nghiệp</span>
+          </div>
+        )}
+        <span className="text-[#64748b]">Nhấp trực tiếp vào kệ hoặc ô chứa để mở bảng điều hành tác vụ</span>
+      </div>
     </div>
-  </div>;
+  );
 }

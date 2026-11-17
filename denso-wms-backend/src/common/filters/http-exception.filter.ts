@@ -44,8 +44,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
       }
       code = code === 'ERROR' ? this.codeFromStatus(statusCode) : code;
     } else if (exception instanceof Error) {
-      message = exception.message;
-      this.logger.error(exception.message, exception.stack);
+      // Internal exceptions can contain PostgreSQL details or submitted values.
+      this.logger.error(`${request.method} ${request.path}: ${exception.name}`, exception.stack?.split('\n').slice(1).join('\n'));
     }
 
     const envelope: ErrorEnvelope = {
@@ -53,7 +53,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       code,
       message,
       details,
-      path: request.url,
+      path: request.path,
       timestamp: new Date().toISOString(),
     };
 

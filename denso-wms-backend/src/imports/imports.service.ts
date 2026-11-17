@@ -11,9 +11,9 @@ import { Order } from '../orders/entities/order.entity';
 import { nextPartColor } from '../parts/constants/part-colors';
 import { Part } from '../parts/entities/part.entity';
 import { WarehouseZone } from '../warehouse-zones/entities/warehouse-zone.entity';
-import { assertCapacity, rackLimits } from '../inventory/inventory.rules';
-import { assertExpiryDeclared, assertStoragePlacement, preferredSlotsByExpiry, STORAGE_CLASSES, suggestStorageClass } from '../inventory/storage-placement.rules';
-import { assertRackProductFamily } from '../inventory/rack-product-family.rules';
+import { assertCapacity, assertRackSlotFits, rackLimits } from '../inventory/inventory.rules';
+import { assertExpiryDeclared, assertStoragePlacement, preferredSlotsByExpiry, STORAGE_CLASSES } from '../inventory/storage-placement.rules';
+import { assertRackProductFamily, lockSkuCategory, RACK_PRODUCT_FAMILIES, resolveProductFamily } from '../inventory/rack-product-family.rules';
 import { ImportPreviewOrder, ImportResult, ImportRowError } from './dto/import-preview.dto';
 
 const TEMPLATE_HEADERS = [
@@ -41,6 +41,7 @@ const OPTIONAL_FIELDS = [
   { field: 'supplierName', aliases: ['SUPPLIERNAME', 'SUPPLIER'] },
   { field: 'supplierId', aliases: ['SUPPLIERID'] },
   { field: 'supplierSiteCode', aliases: ['SUPPLIERSITECODE', 'SUPPLIERSITE'] },
+  { field: 'productFamily', aliases: ['PRODUCTFAMILY', 'CATEGORYCODE'] },
 ] as const;
 
 const normHeader = (v: unknown): string => String(v ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -131,6 +132,7 @@ export class ImportsService {
       'Nhà cung cấp A',
       1001,
       'HN-01',
+      'dry_food_other',
     ]);
     sheet.columns.forEach((col) => (col.width = 16));
     return Buffer.from(await workbook.xlsx.writeBuffer());
@@ -273,6 +275,8 @@ export class ImportsService {
       let colorCursor = await partRepo.count();
       let insertedPartCount = 0;
       let duplicatePartsSkipped = 0;
+      const skus = [...new Set(orders.flatMap(order => order.parts.map(part => part.productCode?.trim() || '')))].sort();
+      for (const sku of skus) await lockSkuCategory(manager, sku);
 
       // When importing into an order the user already has open, every row
       // goes there — never matched-and-merged against some OTHER existing
@@ -282,11 +286,11 @@ export class ImportsService {
       // the intended target, and the file's embedded KH183 silently won).
       let forcedRack: Container | null = null;
       if (targetRackId) {
+        await manager.query('SELECT id FROM containers WHERE id = $1 FOR UPDATE', [targetRackId]);
         forcedRack = await manager.getRepository(Container).findOne({ where: { id: targetRackId } });
         if (!forcedRack) {
           throw new NotFoundException({ code: 'RACK_NOT_FOUND', message: 'Không tìm thấy kệ đích' });
         }
-        await manager.query('SELECT id FROM containers WHERE id = $1 FOR UPDATE', [forcedRack.id]);
       }
 
       let forcedOrder: Order | null = null;
@@ -354,18 +358,20 @@ export class ImportsService {
 
           // Direct-to-rack import must obey the SAME 20-slot, load and hygiene
           // rules as manual inbound. Otherwise one spreadsheet can overfill a rack.
+          const productFamily = await resolveProductFamily(manager, p.productCode, p.productFamily, p.storageClass);
           let importSlot: number | null = null;
           if (forcedRack) {
             const peers = await partRepo.find({ where: { containerId: forcedRack.id } });
             const zone = await manager.getRepository(WarehouseZone).findOne({ where: { warehouseCode: forcedRack.warehouseCode, code: forcedRack.zoneCode } });
             assertExpiryDeclared(p.storageClass, p.expirationDate);
             assertStoragePlacement({ productClass: p.storageClass, zoneMode: zone?.storageMode, rackClasses: peers.map((v) => v.storageClass), productName: p.partName, rackName: `${forcedRack.zoneCode}/${forcedRack.name}` });
-            assertRackProductFamily({ rackFamily: forcedRack.productFamily, peers, productName: p.partName, productClass: p.storageClass, rackName: forcedRack.name });
+            assertRackProductFamily({ rackFamily: forcedRack.productFamily, peers, productName: p.partName, productCode: p.productCode, productFamily, zoneFamily: zone?.productFamily, rackName: forcedRack.name });
             const busy = new Set(peers.filter((v) => v.preferredRackSlot !== null).map((v) => v.preferredRackSlot));
             let lastError: unknown;
             for (const i of preferredSlotsByExpiry(p.expirationDate)) {
               if (busy.has(i)) continue;
               try {
+                assertRackSlotFits(p, p.cartonCount, i, forcedRack);
                 assertCapacity({
                   rackName: forcedRack.name, partName: p.partName, limits: rackLimits(forcedRack),
                   others: peers.map((v) => ({ weightKg: Number(v.totalWeightKg), cbm: Number(v.cbm), slot: v.preferredRackSlot })),
@@ -384,7 +390,8 @@ export class ImportsService {
             partRepo.create({
               orderId: order.id,
               partName: p.partName,
-              productCode: p.productCode,
+              productCode: p.productCode?.trim() || null,
+              productFamily,
               divisionId: division.id,
               dcPrefixId: dcPrefix.id,
               masterPo: p.masterPo,
@@ -397,7 +404,7 @@ export class ImportsService {
               cbm: cbm.toFixed(6),
               containerId: forcedRack?.id ?? null,
               preferredRackSlot: importSlot,
-              storageClass: p.storageClass || suggestStorageClass(p.partName),
+              storageClass: p.storageClass,
               colorHex: nextPartColor(colorCursor++),
               lotNumber: p.lotNumber ?? null,
               uomCode: p.uomCode || 'EA',
@@ -639,8 +646,12 @@ export class ImportsService {
       dcPrefixCache.set(dcKey, dcPrefix);
     }
 
-    const storageClass = (v.storageClass || suggestStorageClass(v.partName)).toLowerCase();
+    const storageClass = (v.storageClass || 'unknown').toLowerCase();
     if (!(STORAGE_CLASSES as readonly string[]).includes(storageClass)) throw new Error(`storageClass không hợp lệ: ${storageClass}`);
+    const productFamily = v.productFamily?.trim().toLowerCase() || null;
+    if (productFamily && !(RACK_PRODUCT_FAMILIES as readonly string[]).includes(productFamily)) {
+      throw new Error(`productFamily không hợp lệ: ${productFamily}`);
+    }
 
     const sizeMatch =
       /^\s*(\d+(?:[.,]\d+)?)\s*[x×]\s*(\d+(?:[.,]\d+)?)\s*[x×]\s*(\d+(?:[.,]\d+)?)\s*$/i.exec(
@@ -652,6 +663,8 @@ export class ImportsService {
       );
     }
     const toMm = (cm: string) => Math.round(parseFloat(cm.replace(',', '.')) * 10);
+    const dimensionsMm = sizeMatch.slice(1).map(toMm);
+    if (dimensionsMm.some(mm => !Number.isSafeInteger(mm) || mm <= 0)) throw new Error('Kích thước carton phải lớn hơn 0 mm');
 
     const quantityPcs = Math.round(parseFloat(v.quantityPcs.replace(',', '.')));
     const cartonCount = parseInt(v.cartonCount, 10);
@@ -675,6 +688,7 @@ export class ImportsService {
       part: {
         partName: v.partName,
         storageClass,
+        productFamily,
         productCode: v.productCode || null,
         divisionCode: division.code,
         dcPrefix: dcPrefix.code,
@@ -682,9 +696,9 @@ export class ImportsService {
         quantityPcs,
         totalWeightKg,
         cartonCount,
-        cartonLengthMm: toMm(sizeMatch[1]),
-        cartonWidthMm: toMm(sizeMatch[2]),
-        cartonHeightMm: toMm(sizeMatch[3]),
+        cartonLengthMm: dimensionsMm[0],
+        cartonWidthMm: dimensionsMm[1],
+        cartonHeightMm: dimensionsMm[2],
         lotNumber: v.lotNumber || null,
         uomCode: (v.uomCode || 'EA').toUpperCase(),
         unitCost: v.unitCost ? Number.parseFloat(v.unitCost.replace(',', '.')) || null : null,

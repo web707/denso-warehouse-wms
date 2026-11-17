@@ -1,25 +1,26 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { environmentKey } from '@/lib/environment';
 import { api } from '@/api';
 import { clearAuthSession, getAccessToken, setAuthSession } from '@/api/client';
 const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [signedIn, setSignedIn] = useState(Boolean(getAccessToken()));
   const [checking, setChecking] = useState(() => {
-    return Boolean(getAccessToken() && !sessionStorage.getItem('masan_user'));
+    return Boolean(getAccessToken() && !sessionStorage.getItem(environmentKey('masan_user')));
   });
   const [user, setUser] = useState(() => {
     try {
-      const cached = sessionStorage.getItem('masan_user');
+      const cached = sessionStorage.getItem(environmentKey('masan_user'));
       return cached ? JSON.parse(cached) : null;
     } catch {
       return null;
     }
   });
   const logout = useCallback(() => {
-    sessionStorage.removeItem('masan_user');
-    sessionStorage.removeItem('ms_orders');
-    sessionStorage.removeItem('ms_parts');
-    sessionStorage.removeItem('ms_racks');
+    sessionStorage.removeItem(environmentKey('masan_user'));
+    sessionStorage.removeItem(environmentKey('ms_orders'));
+    sessionStorage.removeItem(environmentKey('ms_parts'));
+    sessionStorage.removeItem(environmentKey('ms_racks'));
     clearAuthSession(); setSignedIn(false); setUser(null);
   }, []);
   useEffect(() => {
@@ -28,10 +29,12 @@ export function AuthProvider({ children }) {
     api.auth.me().then((u) => {
       if (alive) {
         setUser(u);
-        try { sessionStorage.setItem('masan_user', JSON.stringify(u)); } catch {}
+        try { sessionStorage.setItem(environmentKey('masan_user'), JSON.stringify(u)); } catch {}
       }
     })
-      .catch(() => { if (alive) logout(); }).finally(() => { if (alive) setChecking(false); });
+      .catch((error) => {
+        if (alive && (error.status === 401 || error.status === 403)) logout();
+      }).finally(() => { if (alive) setChecking(false); });
     return () => { alive = false; };
   }, [logout]);
   useEffect(() => {
@@ -42,7 +45,7 @@ export function AuthProvider({ children }) {
     const result = await api.auth.login(username, password);
     setAuthSession(result);
     setUser(result.user);
-    try { sessionStorage.setItem('masan_user', JSON.stringify(result.user)); } catch {}
+    try { sessionStorage.setItem(environmentKey('masan_user'), JSON.stringify(result.user)); } catch {}
     setSignedIn(true);
     return result.user;
   }, []);

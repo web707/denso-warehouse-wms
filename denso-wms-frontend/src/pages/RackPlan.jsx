@@ -21,6 +21,7 @@ import { RACK_SAFETY, LOAD_STATUS_META, loadPercent, loadStatus } from '@/lib/vi
 import { fmtDec, fmtNum } from '@/lib/calculations';
 import { RACK_STATUS_META, summarizeRack } from '@/lib/warehouse';
 import ImportDialog from '@/components/ImportDialog';
+import { isQcAvailable, lotStatusMap, useLotStatus } from '@/lib/supplyChain';
 
 const COLOR_MODE_PART = '__part__';
 const COLOR_MODE_FAMILY = '__family__';
@@ -36,8 +37,11 @@ export default function RackPlan() {
   const { rackId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { racks, parts, orders, divisions, assignPart, updateRack } = useStore();
+  const { racks, parts, orders, divisions, applyInventorySnapshot, refetchParts, updateRack } = useStore();
   const { user } = useAuth();
+  const { data: lotStatus } = useLotStatus();
+  const quality = useMemo(() => lotStatusMap(lotStatus), [lotStatus]);
+  const canMove = canWrite(user?.role, 'inventory');
   const canConfigureRack = canWrite(user?.role, 'racks');
   const [savingFamily, setSavingFamily] = useState(false);
   const { toast } = useToast();
@@ -94,7 +98,10 @@ export default function RackPlan() {
     try {
       const data = await api.storage.solve(rackId);
       setPlan(data);
-      toast({ title: 'Đã tối ưu phân bổ vị trí', description: `${data.placements.length} thùng đã được bố trí theo giới hạn tải trọng` });
+      const errors = data.violations?.filter(v => v.severity === 'error') || [];
+      toast(errors.length
+        ? { variant: 'destructive', title: 'Phương án chưa đủ điều kiện', description: errors[0].message }
+        : { title: 'Đã tính phương án xếp', description: `${data.placements.length} thùng có vị trí` });
     } catch (err) {
       toast({ variant: 'destructive', title: 'Không thể tính toán', description: err.message });
     } finally {
@@ -225,20 +232,23 @@ export default function RackPlan() {
 
   const handleMovePart = async (partId, targetCode) => {
     const target = layout.slots.find((s) => s.code === targetCode);
-    if (!target) return;
+    const part = partsById[partId];
+    if (!target || !part || !canMove || moving) return;
     setMoving(true);
     try {
       const sourceCode = selectedSlotCode;
-      await assignPart(partId, rackId, target.index);
-      const data = await api.storage.solve(rackId);
-      setPlan(data);
-      const actualSlot = target; // Server confirmed the preferred slot; inventory state will refresh.
-      setSelectedSlotCode(actualSlot?.code || targetCode);
+      const tx = await api.inventory.create({
+        type: 'transfer', partId, toRackId: rackId, toSlot: target.index,
+        expectedFromRackId: rackId, expectedFromSlot: part.preferredRackSlot,
+      }, user.id);
+      if (tx.partSnapshot && !tx.retry) applyInventorySnapshot(tx.partSnapshot);
+      else refetchParts().catch(console.error);
+      try { localStorage.setItem('wms_inventory_committed', String(Date.now())); } catch { /* restricted storage */ }
+      window.dispatchEvent(new Event('wms-inventory-committed'));
+      setSelectedSlotCode(targetCode);
       toast({
-        title: actualSlot?.code === targetCode ? 'Đã điều chuyển vị trí' : 'Đã tính lại vị trí an toàn',
-        description: actualSlot?.code === targetCode
-          ? `${sourceCode || 'Vị trí cũ'} → ${targetCode}. Lịch sử điều chuyển đã được ghi.`
-          : `${targetCode} không đáp ứng giới hạn tải; hệ thống bố trí PART tại ${actualSlot?.code || 'vị trí phù hợp khác'}.`,
+        title: 'Đã điều chuyển vị trí',
+        description: `${sourceCode || 'Vị trí cũ'} → ${targetCode}. Lịch sử điều chuyển đã được ghi.`,
       });
     } catch (err) {
       toast({ variant: 'destructive', title: 'Không thể chuyển ô', description: err.message });
@@ -406,6 +416,8 @@ export default function RackPlan() {
                 <SlotDetail
                   slot={selectedSlot}
                   parts={selectedParts}
+                  quality={quality}
+                  canMove={canMove}
                   metric={selectedMetric}
                   allSlots={layout.slots}
                   moving={moving}
@@ -449,7 +461,7 @@ function MiniStat({ icon: Icon, label, value, sub, status }) {
   );
 }
 
-function SlotDetail({ slot, parts, metric, allSlots, moving, onMovePart }) {
+function SlotDetail({ slot, parts, quality, canMove, metric, allSlots, moving, onMovePart }) {
   if (!slot) {
     return (
       <Card className="h-full"><CardContent className="h-full min-h-[300px] flex items-center justify-center text-center text-sm text-slate-400 p-8">
@@ -487,6 +499,9 @@ function SlotDetail({ slot, parts, metric, allSlots, moving, onMovePart }) {
                 <div key={p.id} className="rounded-lg border p-3 bg-slate-50">
                   <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{ background: p.color }} /><p className="font-semibold text-sm text-slate-800">{p.partName}</p></div>
                   <p className="text-xs text-slate-500 mt-1">{p.productCode || 'Không có mã'} · PO {p.masterPo}</p>
+                  <p className={isQcAvailable(quality.get(p.qualityScopeId ?? p.lotId)?.judgment) ? 'text-xs text-emerald-700' : 'text-xs text-red-700'}>
+                    {quality.has(p.qualityScopeId ?? p.lotId) ? `QC ${quality.get(p.qualityScopeId ?? p.lotId).judgment}` : 'Chờ kết luận QC'}
+                  </p>
                 </div>
               ))}
             </div>
@@ -494,7 +509,7 @@ function SlotDetail({ slot, parts, metric, allSlots, moving, onMovePart }) {
               <div className="rounded-lg bg-slate-50 p-3"><p className="text-slate-400">Số thùng trong ô</p><p className="font-bold text-slate-800 mt-1">{metric?.cartonCount || 0}</p></div>
               <div className="rounded-lg bg-slate-50 p-3"><p className="text-slate-400">Mức sử dụng tải</p><p className="font-bold text-slate-800 mt-1">{fmtDec(metric?.percent || 0, 1)}%</p></div>
             </div>
-            {primaryPart && (
+            {primaryPart && canMove && (
               <div className="space-y-1.5">
                 <p className="text-xs font-semibold text-slate-600 flex items-center gap-1"><MoveRight className="w-3.5 h-3.5" /> Điều chuyển PART sang ô khác</p>
                 <Select value={slot.code} onValueChange={(code) => code !== slot.code && onMovePart(primaryPart.id, code)} disabled={moving}>

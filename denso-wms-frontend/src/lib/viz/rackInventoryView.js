@@ -22,7 +22,7 @@ export function rackInventoryView(parts = []) {
   }));
   const unassigned = [];
   for (const part of parts) {
-    if (Number(part.quantity || 0) <= 0 && Number(part.cartons || 0) <= 0) continue;
+    if (Number(part.quantity || 0) <= 0 && Number(part.cartons || 0) <= 0 && Number(part.weight || 0) <= 0) continue;
     const i = part.preferredRackSlot;
     if (!Number.isInteger(i) || i < 0 || i >= slots.length) {
       unassigned.push(part);

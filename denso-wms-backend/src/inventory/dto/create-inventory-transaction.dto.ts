@@ -41,6 +41,17 @@ export class CreateInventoryTransactionDto {
   @Max(19)
   toSlot?: number;
 
+  @ApiPropertyOptional({ description: 'Vị trí nguồn đã thấy khi người dùng xác nhận điều chuyển' })
+  @IsOptional()
+  @IsUUID()
+  expectedFromRackId?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(19)
+  expectedFromSlot?: number;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

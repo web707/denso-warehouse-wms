@@ -1,7 +1,7 @@
 import { DEFAULT_SOLVER_CONFIG, SolverConfig } from '../domain/config';
 import { BlockSummary, ContainerDims, SolveResult, SolverPart, Violation } from '../domain/types';
 import { sortPartsForLoading } from './ordering';
-import { cartonFitsRackSlot, packWarehouseRack, WAREHOUSE_RACK } from './rack-packer';
+import { cartonFitsRackSlot, packWarehouseRack, validRackDimensions, validSolverPart, WAREHOUSE_RACK } from './rack-packer';
 
 export function solve(
   parts: SolverPart[],
@@ -10,7 +10,9 @@ export function solve(
 ): SolveResult {
   const sorted = sortPartsForLoading(parts);
   const violations: Violation[] = [];
-  const packed = packWarehouseRack(sorted);
+  const validDimensions = validRackDimensions(container);
+  if (!validDimensions) violations.push({ code: 'RACK_CONFIGURATION_INVALID', severity: 'error', message: 'Kích thước, thể tích hoặc tải trọng cấu hình kệ không hợp lệ' });
+  const packed = packWarehouseRack(sorted, container);
   const allPlacements = packed.placements;
 
   const blocks: BlockSummary[] = sorted.map((part) => {
@@ -18,21 +20,25 @@ export function solve(
     const unplacedCartons = packed.unplacedByPart[part.id] ?? 0;
 
     const cartonWeightKg = part.cartonCount > 0 ? part.totalWeightKg / part.cartonCount : 0;
-    if (unplacedCartons === part.cartonCount && !cartonFitsRackSlot(part)) {
+    if (!validSolverPart(part)) {
+      violations.push({ code: 'CARTON_INVALID', severity: 'error', message: `PART ${part.partName}: kích thước, số lượng hoặc tải trọng không hợp lệ`, partId: part.id });
+    } else if (unplacedCartons > 0 && !cartonFitsRackSlot(part)) {
       violations.push({
         code: 'CARTON_TOO_LARGE_FOR_RACK_SLOT',
         severity: 'error',
         message: `PART ${part.partName}: kích thước thùng không vừa một ô kệ tiêu chuẩn`,
         partId: part.id,
       });
-    } else if (unplacedCartons === part.cartonCount && cartonWeightKg > WAREHOUSE_RACK.maxWeightPerSlotKg) {
+    } else if (validDimensions && unplacedCartons > 0 && !cartonFitsRackSlot(part, container)) {
+      violations.push({ code: 'CARTON_TOO_LARGE', severity: 'error', message: `PART ${part.partName}: kích thước thùng vượt cấu hình kệ`, partId: part.id });
+    } else if (unplacedCartons > 0 && unplacedCartons === part.cartonCount && cartonWeightKg > WAREHOUSE_RACK.maxWeightPerSlotKg) {
       violations.push({
         code: 'CARTON_TOO_HEAVY_FOR_RACK_SLOT',
         severity: 'error',
         message: `PART ${part.partName}: mỗi thùng ${cartonWeightKg.toFixed(1)} kg vượt giới hạn ${WAREHOUSE_RACK.maxWeightPerSlotKg} kg/ô`,
         partId: part.id,
       });
-    } else if (unplacedCartons > 0) {
+    } else if (validDimensions && unplacedCartons > 0) {
       violations.push({
         code: 'RACK_CAPACITY_EXCEEDED',
         severity: 'error',
@@ -50,7 +56,7 @@ export function solve(
       masterPo: part.masterPo,
       colorHex: part.colorHex,
       cartonCount: part.cartonCount,
-      placedCartonCount: part.cartonCount - unplacedCartons,
+      placedCartonCount: placedForPart.length,
       wallStart: touchedBays.length ? Math.min(...touchedBays) : 0,
       wallEnd: touchedBays.length ? Math.max(...touchedBays) : 0,
     };
@@ -62,14 +68,14 @@ export function solve(
   const weightUsedKg = sumPlacedWeight(sorted, packed.unplacedByPart);
 
   // Keep configurable capacity guards as an additional safety net.
-  if (cbmUsed > container.maxCbm) {
+  if (cbmUsed > container.maxCbm + 1e-9) {
     violations.push({
       code: 'CBM_EXCEEDED',
       severity: 'error',
       message: `Tổng CBM đã xếp (${cbmUsed.toFixed(3)} m³) vượt giới hạn cấu hình (${container.maxCbm} m³)`,
     });
   }
-  if (weightUsedKg > container.maxPayloadKg) {
+  if (weightUsedKg > container.maxPayloadKg + 1e-9) {
     violations.push({
       code: 'WEIGHT_EXCEEDED',
       severity: 'error',
@@ -152,6 +158,7 @@ function sumPlacedCbm(placements: SolveResult['placements']): number {
 
 function sumPlacedWeight(parts: SolverPart[], unplacedByPart: Record<string, number>): number {
   return parts.reduce((sum, part) => {
+    if (!validSolverPart(part) || part.cartonCount === 0) return sum;
     const placedCount = part.cartonCount - (unplacedByPart[part.id] ?? 0);
     return sum + (part.totalWeightKg * placedCount) / part.cartonCount;
   }, 0);

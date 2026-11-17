@@ -8,6 +8,7 @@ export enum InventoryTransactionType {
   INBOUND = 'inbound',
   OUTBOUND = 'outbound',
   TRANSFER = 'transfer',
+  ADJUSTMENT = 'adjustment',
 }
 
 @Entity('inventory_transactions')
@@ -23,6 +24,12 @@ export class InventoryTransaction extends BaseEntity {
   @Index()
   @Column({ name: 'part_id', type: 'uuid', nullable: true })
   partId: string | null;
+
+  @Column({ name: 'lot_id', type: 'uuid', nullable: true })
+  lotId: string | null;
+
+  @Column({ name: 'destination_part_id', type: 'uuid', nullable: true })
+  destinationPartId: string | null;
 
   @Column({ name: 'part_name' })
   partName: string;

@@ -1,16 +1,16 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, IsNull, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, IsNull, Repository } from 'typeorm';
 import { Container } from '../containers/entities/container.entity';
 import { ContainerType } from '../container-types/entities/container-type.entity';
-import { HistoryEventType } from '../history/entities/history-event.entity';
+import { HistoryEvent, HistoryEventType } from '../history/entities/history-event.entity';
 import { HistoryService } from '../history/history.service';
 import { Order, OrderStatus } from '../orders/entities/order.entity';
 import { Part } from '../parts/entities/part.entity';
 import { WarehouseZone } from '../warehouse-zones/entities/warehouse-zone.entity';
 import { assertExpiryDeclared, assertStoragePlacement, preferredSlotsByExpiry } from '../inventory/storage-placement.rules';
 import { assertRackProductFamily } from '../inventory/rack-product-family.rules';
-import { assertCapacity, rackLimits } from '../inventory/inventory.rules';
+import { assertCapacity, assertRackSlotFits, rackLimits } from '../inventory/inventory.rules';
 import { CartonPlacement } from './entities/carton-placement.entity';
 import { LoadPlan } from './entities/load-plan.entity';
 import { ContainerDims, ContainerRecommendation, SolverPart, Violation } from './domain/types';
@@ -47,7 +47,25 @@ export class LoadingService {
       maxPayloadKg: Number(container.maxPayloadKgOverride ?? container.containerType.maxPayloadKg),
     };
 
-    const solverParts: SolverPart[] = parts.map((p) => ({
+    const zone = await this.dataSource.getRepository(WarehouseZone).findOneBy({
+      warehouseCode: container.warehouseCode, code: container.zoneCode,
+    });
+    const categoryErrors: Violation[] = [];
+    const compatibleParts = parts.filter(part => {
+      const peers = parts.filter(other => other.id !== part.id);
+      try {
+        assertStoragePlacement({ productClass: part.storageClass, zoneMode: zone?.storageMode,
+          rackClasses: peers.map(other => other.storageClass), productName: part.partName, rackName: container.name });
+        assertRackProductFamily({ rackFamily: container.productFamily, zoneFamily: zone?.productFamily, peers,
+          productName: part.partName, productCode: part.productCode, productFamily: part.productFamily, rackName: container.name });
+        return true;
+      } catch (error) {
+        if (!(error instanceof BadRequestException)) throw error;
+        categoryErrors.push({ code: 'RACK_CATEGORY_INVALID', severity: 'error', message: `PART ${part.partName} không phù hợp quy tắc phân khu/kệ`, partId: part.id });
+        return false;
+      }
+    });
+    const solverParts: SolverPart[] = compatibleParts.map((p) => ({
       id: p.id,
       partName: p.partName,
       masterPo: p.masterPo,
@@ -65,6 +83,7 @@ export class LoadingService {
     }));
 
     const result = solve(solverParts, dims);
+    result.violations.push(...categoryErrors);
 
     const savedPlan = await this.dataSource.transaction(async (manager) => {
       await manager
@@ -118,7 +137,7 @@ export class LoadingService {
       container.orderId,
     );
 
-    if (container.orderId) {
+    if (container.orderId && !result.violations.some(violation => violation.severity === 'error')) {
       await this.orders.update(
         { id: container.orderId, status: OrderStatus.DRAFT },
         { status: OrderStatus.ALLOCATED },
@@ -139,12 +158,24 @@ export class LoadingService {
   async autoAssign(
     containerId: string,
   ): Promise<{ assignedCount: number; remainingUnassignedCount: number }> {
-    const container = await this.containers.findOne({ where: { id: containerId } });
+    return this.dataSource.transaction(manager => this.assignAvailableParts(manager, containerId));
+  }
+
+  private async assignAvailableParts(manager: EntityManager, containerId: string): Promise<{ assignedCount: number; remainingUnassignedCount: number }> {
+    const initial = await manager.findOneBy(Container, { id: containerId });
+    if (initial) {
+      await manager.query('SELECT id FROM parts WHERE order_id = $1 OR container_id = $2 ORDER BY id FOR UPDATE', [initial.orderId, containerId]);
+      await manager.query('SELECT id FROM containers WHERE id = $1 FOR UPDATE', [containerId]);
+    }
+    const container = await manager.findOneBy(Container, { id: containerId });
     if (!container) {
       throw new NotFoundException({
         code: 'CONTAINER_NOT_FOUND',
         message: 'Không tìm thấy kệ kho',
       });
+    }
+    if (container.orderId !== initial?.orderId) {
+      throw new BadRequestException({ code: 'RACK_SCOPE_CHANGED', message: 'Lô của kệ đã thay đổi. Vui lòng thử lại.' });
     }
     if (!container.orderId) {
       throw new BadRequestException({
@@ -162,8 +193,8 @@ export class LoadingService {
       maxPayloadKg: Number(container.maxPayloadKgOverride ?? container.containerType.maxPayloadKg),
     };
 
-    const alreadyAssigned = await this.parts.find({ where: { containerId } });
-    const candidates = await this.parts.find({
+    const alreadyAssigned = await manager.getRepository(Part).find({ where: { containerId } });
+    const candidates = await manager.getRepository(Part).find({
       where: { orderId: container.orderId, containerId: IsNull() },
     });
     // Same division -> DC prefix -> master PO ordering the solver uses
@@ -184,7 +215,7 @@ export class LoadingService {
 
     const accepted: Part[] = [];
     const chosenSlots = new Map<string, number>();
-    const zone = await this.dataSource.getRepository(WarehouseZone).findOne({ where: { warehouseCode: container.warehouseCode, code: container.zoneCode } });
+    const zone = await manager.getRepository(WarehouseZone).findOne({ where: { warehouseCode: container.warehouseCode, code: container.zoneCode } });
     const used = new Set(alreadyAssigned.map((part) => part.preferredRackSlot).filter((slot): slot is number => slot !== null));
     // Legacy unplaced stock occupies a real physical location but has no slot ID;
     // do not double-book that space silently.
@@ -198,11 +229,12 @@ export class LoadingService {
       try {
         assertExpiryDeclared(p.storageClass, p.expirationDate);
         assertStoragePlacement({ productClass: p.storageClass, zoneMode: zone?.storageMode, rackClasses: [...alreadyAssigned, ...accepted].map((part) => part.storageClass), productName: p.partName, rackName: container.name });
-        assertRackProductFamily({ rackFamily: container.productFamily, peers: [...alreadyAssigned, ...accepted], productName: p.partName, productClass: p.storageClass, rackName: container.name });
+        assertRackProductFamily({ rackFamily: container.productFamily, peers: [...alreadyAssigned, ...accepted], productName: p.partName, productCode: p.productCode, productFamily: p.productFamily, zoneFamily: zone?.productFamily, rackName: container.name });
       } catch { continue; /* Skip other families: keep looking for matching lots. */ }
       const availableSlots = preferredSlotsByExpiry(p.expirationDate).filter((i) => !used.has(i));
       const destinationSlot = availableSlots.find((i) => {
         try {
+          assertRackSlotFits(p, p.cartonCount, i, container);
           assertCapacity({ rackName: container.name, partName: p.partName, limits: rackLimits(container),
             others: [...alreadyAssigned, ...accepted].map((part) => ({ weightKg: Number(part.totalWeightKg), cbm: Number(part.cbm), slot: chosenSlots.get(part.id) ?? part.preferredRackSlot })),
             before: null, after: { weightKg: Number(p.totalWeightKg), cbm: Number(p.cbm), slot: i } });
@@ -243,20 +275,21 @@ export class LoadingService {
     if (accepted.length > 0) {
       // Use one concrete slot per PART; updating just containerId would allow overlap.
       for (const part of accepted) {
-        await this.parts.update({ id: part.id }, { containerId, preferredRackSlot: chosenSlots.get(part.id) ?? null });
+        await manager.update(Part, { id: part.id }, { containerId, preferredRackSlot: chosenSlots.get(part.id) ?? null });
       }
-      await this.history.log(
-        HistoryEventType.PART_ASSIGNED,
-        `Tự động phân bổ ${accepted.length} PART vào kệ ${container.name}`,
-        {
+      await manager.save(HistoryEvent, manager.create(HistoryEvent, {
+        type: HistoryEventType.PART_ASSIGNED,
+        description: `Tự động phân bổ ${accepted.length} PART vào kệ ${container.name}`,
+        timestamp: new Date(),
+        details: {
           rackId: containerId,
           rackName: container.name,
           orderId: container.orderId,
           partIds: accepted.map((p) => p.id),
           partNames: accepted.map((p) => p.partName),
         },
-        container.orderId,
-      );
+        orderId: container.orderId,
+      }));
     }
 
     return {

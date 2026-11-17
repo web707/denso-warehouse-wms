@@ -60,8 +60,12 @@ export function preferredSlotsByExpiry(expirationDate: string | null | undefined
   return days <= 90 ? indices : [...indices.slice(10), ...indices.slice(0, 10)];
 }
 
+export function requiresExpiry(storageClass?: string | null): boolean {
+  return Boolean(storageClass && storageClass !== 'household' && storageClass !== 'unknown');
+}
+
 export function assertExpiryDeclared(storageClass: string | null | undefined, expirationDate: string | null | undefined) {
-  if (storageClass && storageClass !== 'household' && storageClass !== 'unknown' && !expirationDate) {
+  if (requiresExpiry(storageClass) && !expirationDate) {
     throw new BadRequestException({ code: 'EXPIRY_DATE_REQUIRED', message: 'Thực phẩm/đồ uống cần khai báo HSD trước khi phân bổ vào kệ. Mở thông tin PART hoặc trang FEFO để nhập HSD.' });
   }
 }

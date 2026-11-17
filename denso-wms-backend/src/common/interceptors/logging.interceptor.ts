@@ -1,7 +1,6 @@
 import { CallHandler, ExecutionContext, Injectable, Logger, NestInterceptor } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { Observable } from 'rxjs';
-import { tap } from 'rxjs/operators';
 
 @Injectable()
 export class LoggingInterceptor implements NestInterceptor {
@@ -10,22 +9,14 @@ export class LoggingInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const req = context.switchToHttp().getRequest<Request>();
     const res = context.switchToHttp().getResponse<Response>();
-    const { method, originalUrl } = req;
+    const { method, path } = req;
     const start = Date.now();
 
-    return next.handle().pipe(
-      tap({
-        next: () => {
-          const ms = Date.now() - start;
-          this.logger.log(`${method} ${originalUrl} ${res.statusCode} +${ms}ms`);
-        },
-        error: (err) => {
-          const ms = Date.now() - start;
-          this.logger.warn(
-            `${method} ${originalUrl} ${res.statusCode || 500} +${ms}ms - ${err?.message}`,
-          );
-        },
-      }),
-    );
+    res.once('finish', () => {
+      const line = `${method} ${path} ${res.statusCode} +${Date.now() - start}ms`;
+      if (res.statusCode >= 400) this.logger.warn(line);
+      else this.logger.log(line);
+    });
+    return next.handle();
   }
 }
