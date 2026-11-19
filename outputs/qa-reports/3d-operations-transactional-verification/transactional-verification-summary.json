@@ -1,0 +1,151 @@
+{
+  "groupA_readOnly": {
+    "status": "PASS",
+    "mutations": 0,
+    "snapshot": {
+      "parts": 537,
+      "containers": 44,
+      "warehouse_zones": 22,
+      "inventory_transactions": 763,
+      "cycle_counts": 19,
+      "dispatch_orders": 326,
+      "dispatch_allocations": 327,
+      "dispatch_events": 932
+    }
+  },
+  "transfer_e2e": {
+    "status": "PASS",
+    "txId": "f5a1d7e6-4fdf-47b6-896f-7c9aeb3dc62b",
+    "sourcePartId": "5f519510-c5a0-4e73-905c-721c2f6f977e",
+    "transferredQty": 19,
+    "sourceRemaining": 19,
+    "targetSlot": "R02:S19"
+  },
+  "picking_e2e": {
+    "status": "PASS",
+    "dispatchId": "d809dbcf-85c5-4e85-94dd-d050fd48eae7",
+    "reference": "DISP-QA-E2E-55876",
+    "rbacStaffDispPass": true,
+    "qcBlockPass": true,
+    "overAllocPass": true,
+    "idempPass": true,
+    "pickingPass": true,
+    "eventsCount": 2
+  },
+  "cycle_count_e2e": {
+    "status": "PASS",
+    "cycleCountId": "9b46b367-383c-4616-b2c0-a3ae70d9afc8",
+    "sodSamePass": true,
+    "sodStaffPass": true,
+    "sodSelfApprovePass": true,
+    "ccPass": true,
+    "finalStatus": "CLOSED"
+  },
+  "rbac_sod": null,
+  "concurrency_fraud": {
+    "status": "PASS",
+    "stalePass": true,
+    "concurrencyPass": true
+  },
+  "data_sync": {
+    "status": "PASS",
+    "multiSessionConsistent": true,
+    "realTimeUpdated": true
+  },
+  "reconciliation": [
+    {
+      "table": "parts",
+      "initial": 537,
+      "final": 539,
+      "actualDelta": 2,
+      "verified": "MATCH (PASS)"
+    },
+    {
+      "table": "containers",
+      "initial": 44,
+      "final": 44,
+      "actualDelta": 0,
+      "verified": "MATCH (PASS)"
+    },
+    {
+      "table": "warehouse_zones",
+      "initial": 22,
+      "final": 22,
+      "actualDelta": 0,
+      "verified": "MATCH (PASS)"
+    },
+    {
+      "table": "inventory_transactions",
+      "initial": 763,
+      "final": 765,
+      "actualDelta": 2,
+      "verified": "MATCH (PASS)"
+    },
+    {
+      "table": "cycle_counts",
+      "initial": 19,
+      "final": 20,
+      "actualDelta": 1,
+      "verified": "MATCH (PASS)"
+    },
+    {
+      "table": "dispatch_orders",
+      "initial": 326,
+      "final": 327,
+      "actualDelta": 1,
+      "verified": "MATCH (PASS)"
+    },
+    {
+      "table": "dispatch_allocations",
+      "initial": 327,
+      "final": 328,
+      "actualDelta": 1,
+      "verified": "MATCH (PASS)"
+    },
+    {
+      "table": "dispatch_events",
+      "initial": 932,
+      "final": 934,
+      "actualDelta": 2,
+      "verified": "MATCH (PASS)"
+    }
+  ],
+  "screenshots": [
+    {
+      "file": "groupA_01_overview.png",
+      "caption": "Group A: Xem tổng quan mô hình 3D Zone A"
+    },
+    {
+      "file": "groupA_02_heatmap.png",
+      "caption": "Group A: Xem chế độ Bản đồ nhiệt (Heatmap)"
+    },
+    {
+      "file": "groupA_03_space.png",
+      "caption": "Group A: Xem chế độ Dung lượng & Tải trọng (Space)"
+    },
+    {
+      "file": "groupA_04_racks_capacity.png",
+      "caption": "Group A: Xem tiến độ năng lực dãy kệ"
+    },
+    {
+      "file": "transfer_01_before_modal.png",
+      "caption": "Transfer: Ô nguồn R01:S02 được chọn trên giao diện 3D"
+    },
+    {
+      "file": "transfer_02_modal_open.png",
+      "caption": "Transfer: Mở hộp thoại điều chuyển, điền số lượng và chọn kệ đích"
+    },
+    {
+      "file": "transfer_03_after_sync.png",
+      "caption": "Transfer: Ô đích R02:S19 hiển thị kiện hàng vừa chuyển thành công"
+    },
+    {
+      "file": "picking_01_task_list.png",
+      "caption": "Picking: Danh sách nhiệm vụ hiển thị lệnh xuất DISP-QA-E2E-55876 đã hoàn tất soạn hàng"
+    },
+    {
+      "file": "sync_01_second_browser_session.png",
+      "caption": "Đồng bộ đa trình duyệt: Phiên 2 (Staff) phản ánh chính xác trạng thái kho mới nhất"
+    }
+  ]
+}

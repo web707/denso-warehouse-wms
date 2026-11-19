@@ -12,16 +12,29 @@ import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import ExpiryBadge from '@/components/ExpiryBadge';
 import Pill from '@/components/Pill';
 import { JUDGMENT, lotStatusMap, useLotStatus } from '@/lib/supplyChain';
-import { ArrowLeft, Pencil, Trash2, MoreVertical, PackagePlus, Search, Upload, ArrowRight } from 'lucide-react';
+import {
+  ArrowLeft,
+  Pencil,
+  Trash2,
+  MoreVertical,
+  PackagePlus,
+  Search,
+  Upload,
+  ArrowRight,
+  Boxes,
+  Layers,
+  Scale,
+  Package,
+} from 'lucide-react';
 
-// A dedicated page per order (not a same-page reveal) — every action here
-// (Nhập file, Thêm hàng) is scoped to THIS order's id from the route, so
-// there's no way to accidentally act on a different order.
 export default function OrderDetail() {
   const { orderId } = useParams();
   const navigate = useNavigate();
@@ -70,18 +83,22 @@ export default function OrderDetail() {
     setSearchParams(updated, { replace: true });
   }, [searchParams, setSearchParams]);
 
-  const handleEdit = (part) => { setSuggestedProduct(''); setEditing(part); setDialogOpen(true); };
-  const handleAdd = () => { setSuggestedProduct(''); setEditing(null); setDialogOpen(true); };
+  const handleEdit = (part) => {
+    setSuggestedProduct('');
+    setEditing(part);
+    setDialogOpen(true);
+  };
+  const handleAdd = () => {
+    setSuggestedProduct('');
+    setEditing(null);
+    setDialogOpen(true);
+  };
 
   const handleDeleteOrder = async () => {
     await deleteOrder(orderId);
     navigate('/orders');
   };
 
-  // No rack yet for this order → open the wizard straight to the
-  // "pick a rack type" step (it already knows the order, via
-  // presetOrderId, so there's nothing to choose there). Once at least one
-  // rack exists, jump straight to viewing it instead.
   const handleDongHang = () => {
     if (orderRacks.length === 0) {
       setWizardOpen(true);
@@ -92,142 +109,218 @@ export default function OrderDetail() {
 
   if (!order) {
     return (
-      <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto space-y-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/orders')} className="-ml-2">
+      <div className="space-y-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate('/orders')}
+          className="text-masan-muted hover:text-masan-text"
+        >
           <ArrowLeft className="w-4 h-4 mr-1.5" /> Tất cả đơn hàng
         </Button>
-        <p className="text-sm text-slate-400">Không tìm thấy đơn hàng này.</p>
+        <p className="text-sm text-masan-muted">Không tìm thấy đơn hàng này.</p>
       </div>
     );
   }
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto space-y-5">
-      <Button variant="ghost" size="sm" onClick={() => navigate('/orders')} className="-ml-2">
-        <ArrowLeft className="w-4 h-4 mr-1.5" /> Tất cả đơn hàng
-      </Button>
+    <div className="space-y-6">
+      {/* Back button */}
+      <div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate('/orders')}
+          className="-ml-2 text-xs font-semibold text-masan-muted hover:text-masan-emerald"
+        >
+          <ArrowLeft className="w-3.5 h-3.5 mr-1.5" /> Quay lại danh sách Lô hàng
+        </Button>
+      </div>
 
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      {/* Top Header & Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-masan-border pb-5">
         <div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-2xl font-semibold text-slate-900">{order.name || order.orderNumber}</h1>
-            <Badge variant="secondary" className="text-xs">{order.orderNumber}</Badge>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-masan-text">
+              {order.name || order.orderNumber}
+            </h1>
+            <span className="font-mono text-xs font-bold text-masan-teal bg-masan-teal/10 border border-masan-teal/20 px-2.5 py-0.5 rounded-md">
+              {order.orderNumber}
+            </span>
           </div>
-          <p className="text-sm text-slate-500 mt-1">
-            {order.division} → {order.destination} · {orderParts.length} PART · {fmtNum(totalCartons)} thùng ·{' '}
-            {fmtDec(totalCbm, 2)} m³ · {fmtNum(totalWeight)} kg
+          <p className="text-xs text-masan-muted mt-1">
+            {order.division || 'Kho gốc'} → {order.destination || 'DC-HN-01'} ·{' '}
+            <span className="font-mono text-masan-text">{orderParts.length}</span> PARTs ·{' '}
+            <span className="font-mono text-masan-text">{fmtNum(totalCartons)}</span> thùng ·{' '}
+            <span className="font-mono text-masan-text">{fmtDec(totalCbm, 2)}</span> m³ ·{' '}
+            <span className="font-mono text-masan-text">{fmtNum(totalWeight)}</span> kg
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setImportOpen(true)}>
-            <Upload className="w-4 h-4 mr-1.5" /> Nhập file
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setImportOpen(true)}
+            className="border-masan-border bg-masan-elevated text-xs text-masan-text hover:border-masan-teal hover:text-masan-teal"
+          >
+            <Upload className="w-3.5 h-3.5 mr-1.5 text-masan-teal" /> Nhập Excel
           </Button>
-          <Button variant="outline" onClick={handleAdd}>
-            <PackagePlus className="w-4 h-4 mr-1.5" /> Thêm hàng
+          <Button
+            variant="outline"
+            onClick={handleAdd}
+            className="border-masan-border bg-masan-elevated text-xs text-masan-text hover:border-masan-emerald hover:text-masan-emerald"
+          >
+            <PackagePlus className="w-3.5 h-3.5 mr-1.5" /> Thêm hàng
           </Button>
-          <Button variant="outline" onClick={handleDongHang}>
-            Phân hàng <ArrowRight className="w-4 h-4 ml-1.5" />
+          <Button
+            onClick={handleDongHang}
+            className="bg-masan-emerald hover:bg-masan-emerald/90 text-slate-950 font-bold shadow-md shadow-emerald-950/20 text-xs"
+          >
+            Phân hàng kệ kho <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon"><MoreVertical className="w-4 h-4" /></Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8 text-masan-muted hover:text-masan-text border border-masan-border/40"
+              >
+                <MoreVertical className="w-4 h-4" />
+              </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem className="text-red-600" onClick={handleDeleteOrder}>
-                <Trash2 className="w-3.5 h-3.5 mr-2" /> Xóa đơn hàng
+            <DropdownMenuContent align="end" className="bg-masan-surface border-masan-border text-xs">
+              <DropdownMenuItem
+                className="text-rose-400 focus:bg-rose-500/10 focus:text-rose-300"
+                onClick={handleDeleteOrder}
+              >
+                <Trash2 className="w-3.5 h-3.5 mr-2" /> Xóa lô hàng này
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-        <Input
-          placeholder="Tìm PART, mã hàng, Master PO..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
-        />
+      {/* Search Input Bar */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="relative max-w-sm flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-masan-muted" />
+          <Input
+            placeholder="Tìm PART, mã hàng, Master PO..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 bg-masan-surface border-masan-border text-masan-text text-xs focus:border-masan-emerald"
+          />
+        </div>
+        <span className="text-xs font-mono text-masan-muted">
+          {filtered.length} / {orderParts.length} mục
+        </span>
       </div>
 
-      <Card className="overflow-hidden">
+      {/* High-density Parts Data Table */}
+      <div className="rounded-2xl border border-masan-border bg-masan-surface shadow-lg overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-left">
-                <th className="px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">PART</th>
-                <th className="px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Item Number</th>
-                <th className="px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Lot Number</th>
-                <th className="px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Division</th>
-                <th className="px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">DC Prefix</th>
-                <th className="px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Master PO</th>
-                <th className="px-4 py-3 font-semibold text-slate-600 text-right whitespace-nowrap">Số lượng</th>
-                <th className="px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Hạn dùng</th>
-                <th className="px-4 py-3 font-semibold text-slate-600 text-right whitespace-nowrap">Trọng lượng</th>
-                <th className="px-4 py-3 font-semibold text-slate-600 text-right whitespace-nowrap">Thùng</th>
-                <th className="px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Kích thước (cm)</th>
-                <th className="px-4 py-3 font-semibold text-slate-600 text-right whitespace-nowrap">CBM</th>
-                <th className="px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Kệ kho</th>
+          <table className="w-full text-xs text-left">
+            <thead className="sticky top-0 bg-masan-elevated text-[11px] font-semibold text-masan-muted uppercase tracking-wider border-b border-masan-border z-10">
+              <tr>
+                <th className="px-4 py-3 whitespace-nowrap">PART / Tên sản phẩm</th>
+                <th className="px-4 py-3 whitespace-nowrap">Item Number</th>
+                <th className="px-4 py-3 whitespace-nowrap">Lô & QC</th>
+                <th className="px-4 py-3 whitespace-nowrap">Division</th>
+                <th className="px-4 py-3 whitespace-nowrap">Master PO</th>
+                <th className="px-4 py-3 text-right whitespace-nowrap">Số lượng</th>
+                <th className="px-4 py-3 whitespace-nowrap">Hạn dùng</th>
+                <th className="px-4 py-3 text-right whitespace-nowrap">Trọng lượng</th>
+                <th className="px-4 py-3 text-right whitespace-nowrap">Thùng</th>
+                <th className="px-4 py-3 whitespace-nowrap">Quy cách (cm)</th>
+                <th className="px-4 py-3 text-right whitespace-nowrap">CBM</th>
+                <th className="px-4 py-3 whitespace-nowrap">Kệ kho</th>
                 <th className="px-4 py-3 w-10"></th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-masan-border/40 font-mono text-[11px]">
               {filtered.length === 0 && (
-                <tr><td colSpan={14} className="px-4 py-12 text-center text-slate-400">Không có hàng hóa nào.</td></tr>
+                <tr>
+                  <td colSpan={13} className="px-4 py-12 text-center text-masan-muted font-sans">
+                    Không có hàng hóa nào phù hợp với tìm kiếm.
+                  </td>
+                </tr>
               )}
               {filtered.map((p) => (
-                <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition">
-                  <td className="px-4 py-3">
+                <tr key={p.id} className="hover:bg-masan-elevated/40 transition-colors">
+                  <td className="px-4 py-3 font-sans">
                     <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: p.color }} />
-                      <span className="font-medium text-slate-700">{p.partName}</span>
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: p.color || '#10B981' }} />
+                      <span className="font-semibold text-masan-text text-xs">{p.partName}</span>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-slate-600">{p.productCode}</td>
-                  <td className="px-4 py-3 text-slate-600 tabular-nums whitespace-nowrap">
-                    {p.lotNumber || '—'}
+                  <td className="px-4 py-3 text-masan-muted">{p.productCode}</td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <span className="text-masan-text font-bold">{p.lotNumber || '—'}</span>
                     {lotQuality.has(p.qualityScopeId ?? p.lotId) ? (
-                      <Pill tone={JUDGMENT[lotQuality.get(p.qualityScopeId ?? p.lotId).judgment]?.tone || 'red'} className="ml-2" title={`Kiểm tra ${lotQuality.get(p.qualityScopeId ?? p.lotId).inspectionType}`}>{lotQuality.get(p.qualityScopeId ?? p.lotId).judgment}</Pill>
-                    ) : (p.quantity > 0 || p.cartons > 0 || p.weight > 0) && <Pill tone="amber" className="ml-2">Chờ QC</Pill>}
+                      <Pill
+                        tone={JUDGMENT[lotQuality.get(p.qualityScopeId ?? p.lotId).judgment]?.tone || 'red'}
+                        className="ml-2"
+                        title={`Kiểm tra ${lotQuality.get(p.qualityScopeId ?? p.lotId).inspectionType}`}
+                      >
+                        {lotQuality.get(p.qualityScopeId ?? p.lotId).judgment}
+                      </Pill>
+                    ) : (
+                      (p.quantity > 0 || p.cartons > 0 || p.weight > 0) && (
+                        <Pill tone="amber" className="ml-2">
+                          Chờ QC
+                        </Pill>
+                      )
+                    )}
                   </td>
-                  <td className="px-4 py-3">
-                    <Badge variant="outline" className="text-xs font-semibold">{p.divisionCode || '—'}</Badge>
+                  <td className="px-4 py-3 font-sans">
+                    <span className="rounded bg-masan-elevated border border-masan-border px-1.5 py-0.5 text-[10px] text-masan-muted">
+                      {p.divisionCode || '—'}
+                    </span>
                   </td>
-                  <td className="px-4 py-3 text-slate-600 tabular-nums">{p.dcPrefix || '—'}</td>
-                  <td className="px-4 py-3 text-slate-600 tabular-nums">{p.masterPo || '—'}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-slate-700">{fmtNum(p.quantity)} <span className="text-xs text-slate-400">{p.uomCode}</span></td>
-                  <td className="px-4 py-3 whitespace-nowrap"><ExpiryBadge date={p.expirationDate} /></td>
-                  <td className="px-4 py-3 text-right tabular-nums text-slate-700">{fmtKg(p.weight)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-slate-700">{p.cartons}</td>
-                  <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{p.cartonLength} × {p.cartonWidth} × {p.cartonHeight}</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-semibold text-slate-900">{fmtDec(calcPartCbm(p), 3)}</td>
-                  <td className="px-4 py-3">
-                    <Select value={p.rackId || '__none__'} onValueChange={(v) => assignPart(p.id, v === '__none__' ? null : v)}>
-                      <SelectTrigger className="h-8 text-xs w-[140px]">
+                  <td className="px-4 py-3 text-masan-muted">{p.masterPo || '—'}</td>
+                  <td className="px-4 py-3 text-right font-bold text-masan-emerald">
+                    {fmtNum(p.quantity)} <span className="text-[10px] text-masan-muted font-sans">{p.uomCode}</span>
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap font-sans">
+                    <ExpiryBadge date={p.expirationDate} />
+                  </td>
+                  <td className="px-4 py-3 text-right text-masan-text">{fmtKg(p.weight)}</td>
+                  <td className="px-4 py-3 text-right text-masan-text">{p.cartons}</td>
+                  <td className="px-4 py-3 text-masan-muted whitespace-nowrap">
+                    {p.cartonLength} × {p.cartonWidth} × {p.cartonHeight}
+                  </td>
+                  <td className="px-4 py-3 text-right font-bold text-masan-teal">{fmtDec(calcPartCbm(p), 3)}</td>
+                  <td className="px-4 py-3 font-sans">
+                    <Select
+                      value={p.rackId || '__none__'}
+                      onValueChange={(v) => assignPart(p.id, v === '__none__' ? null : v)}
+                    >
+                      <SelectTrigger className="h-7 text-xs w-[140px] bg-masan-elevated border-masan-border text-masan-text focus:border-masan-emerald">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-masan-surface border-masan-border text-masan-text text-xs">
                         <SelectItem value="__none__">— Chưa phân bổ —</SelectItem>
                         {orderRacks.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>{c.zoneCode} / {c.name}</SelectItem>
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.zoneCode} / {c.name}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 font-sans">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreVertical className="w-4 h-4" />
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-masan-muted hover:text-masan-text">
+                          <MoreVertical className="w-3.5 h-3.5" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
+                      <DropdownMenuContent align="end" className="bg-masan-surface border-masan-border text-xs">
                         <DropdownMenuItem onClick={() => handleEdit(p)}>
-                          <Pencil className="w-3.5 h-3.5 mr-2" /> Sửa
+                          <Pencil className="w-3.5 h-3.5 mr-2 text-masan-teal" /> Sửa thông tin
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="text-red-600" onClick={() => deletePart(p.id)}>
-                          <Trash2 className="w-3.5 h-3.5 mr-2" /> Xóa
+                        <DropdownMenuItem className="text-rose-400 focus:bg-rose-500/10 focus:text-rose-300" onClick={() => deletePart(p.id)}>
+                          <Trash2 className="w-3.5 h-3.5 mr-2" /> Xóa PART
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -237,9 +330,15 @@ export default function OrderDetail() {
             </tbody>
           </table>
         </div>
-      </Card>
+      </div>
 
-      <PartDialog open={dialogOpen} onOpenChange={setDialogOpen} part={editing} defaultOrderId={orderId} suggestedProduct={suggestedProduct} />
+      <PartDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        part={editing}
+        defaultOrderId={orderId}
+        suggestedProduct={suggestedProduct}
+      />
 
       <ImportDialog
         open={importOpen}

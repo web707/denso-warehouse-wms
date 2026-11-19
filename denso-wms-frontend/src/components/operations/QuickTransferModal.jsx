@@ -25,6 +25,9 @@ export default function QuickTransferModal({
   sourceRack,
   sourceSlotIndex,
   sourcePart,
+  initialTargetRackId = '',
+  initialTargetSlot = '',
+  onRequest3DSelectTarget,
   onSuccess
 }) {
   const { user } = useAuth();
@@ -32,19 +35,31 @@ export default function QuickTransferModal({
   const { toast } = useToast();
   const hasPermission = canWrite(user?.role, 'inventory');
 
-  const [targetRackId, setTargetRackId] = useState('');
-  const [targetSlot, setTargetSlot] = useState('');
+  const [targetRackId, setTargetRackId] = useState(() => initialTargetRackId || '');
+  const [targetSlot, setTargetSlot] = useState(() => initialTargetSlot !== undefined ? String(initialTargetSlot) : '');
   const [transferQty, setTransferQty] = useState(() => sourcePart?.quantity || 0);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  // Update default transfer quantity when sourcePart changes
+  // Update default transfer quantity and targets when props change
   useEffect(() => {
     if (sourcePart?.quantity) {
       setTransferQty(sourcePart.quantity);
     }
   }, [sourcePart]);
+
+  useEffect(() => {
+    if (initialTargetRackId) {
+      setTargetRackId(initialTargetRackId);
+    }
+  }, [initialTargetRackId]);
+
+  useEffect(() => {
+    if (initialTargetSlot !== '' && initialTargetSlot !== null && initialTargetSlot !== undefined) {
+      setTargetSlot(String(initialTargetSlot));
+    }
+  }, [initialTargetSlot]);
 
   const targetRack = useMemo(() => racks.find(r => r.id === targetRackId), [racks, targetRackId]);
 
@@ -189,7 +204,21 @@ export default function QuickTransferModal({
 
           {/* Kệ đích */}
           <div className="space-y-1">
-            <label className="font-semibold text-[#94a3b8]">Kệ nhận hàng (Kệ đích):</label>
+            <div className="flex items-center justify-between">
+              <label className="font-semibold text-[#94a3b8]">Kệ nhận hàng (Kệ đích):</label>
+              {onRequest3DSelectTarget && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onRequest3DSelectTarget();
+                  }}
+                  className="text-[11px] font-semibold text-primary hover:text-teal-300 flex items-center gap-1 transition"
+                  title="Nhấp vào ô trống bất kỳ trên không gian 3D để chọn làm đích"
+                >
+                  🎯 Chọn trực tiếp trên 3D
+                </button>
+              )}
+            </div>
             <select
               required
               disabled={!hasPermission || busy}

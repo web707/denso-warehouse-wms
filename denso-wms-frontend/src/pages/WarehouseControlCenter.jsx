@@ -19,6 +19,7 @@ import WarehouseScene3D from '@/components/viz/WarehouseScene3D';
 import QuickTransferModal from '@/components/operations/QuickTransferModal';
 import QuickPickingModal from '@/components/operations/QuickPickingModal';
 import QuickCycleCountModal from '@/components/operations/QuickCycleCountModal';
+import QuickPutawayModal from '@/components/operations/QuickPutawayModal';
 import {
   fmtNum,
   fmtDec
@@ -64,7 +65,8 @@ import {
   RefreshCw,
   ExternalLink,
   QrCode,
-  Compass
+  Compass,
+  PackagePlus
 } from 'lucide-react';
 
 export default function WarehouseControlCenter() {
@@ -99,6 +101,12 @@ export default function WarehouseControlCenter() {
   const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [pickingModalOpen, setPickingModalOpen] = useState(false);
   const [countModalOpen, setCountModalOpen] = useState(false);
+  const [putawayModalOpen, setPutawayModalOpen] = useState(false);
+
+  // 3D Transfer Mode state
+  const [isTransferMode, setIsTransferMode] = useState(false);
+  const [sourceTransferSlot, setSourceTransferSlot] = useState(null);
+  const [targetTransferSlot, setTargetTransferSlot] = useState(null);
 
   // Sync & Network status with controlled live polling
   const [lastSyncTime, setLastSyncTime] = useState(() => new Date().toLocaleTimeString('vi-VN'));
@@ -418,6 +426,36 @@ export default function WarehouseControlCenter() {
       setSelectedRackId(found.id);
       setSelectedSlotIndex(slotIdx);
     }
+  };
+
+  // 3D Transfer Targeting Handlers
+  const handleSelectTransferTarget = (rackId, slotIdx) => {
+    const found = rackSummaries.find(r => r.id === rackId || r.rackId === rackId || r.name === rackId);
+    const targetId = found ? found.id : rackId;
+    setTargetTransferSlot({ rackId: targetId, slotIndex: slotIdx });
+    setIsTransferMode(false);
+    setTransferModalOpen(true);
+  };
+
+  const handleStart3DTransfer = () => {
+    if (!selectedRack || selectedSlotIndex === null || !selectedSlotPart) return;
+    setSourceTransferSlot({
+      rackId: selectedRack.id,
+      rackName: selectedRack.name,
+      slotIndex: selectedSlotIndex,
+      part: selectedSlotPart
+    });
+    setTargetTransferSlot(null);
+    setIsTransferMode(true);
+    toast({
+      title: 'Chế độ điều chuyển 3D',
+      description: `Đang điều chuyển từ Kệ ${selectedRack.name} - ${slotCode(selectedSlotIndex)}. Nhấp vào một ô trống phát sáng để chọn làm đích!`
+    });
+  };
+
+  const handleCancelTransferMode = () => {
+    setIsTransferMode(false);
+    setSourceTransferSlot(null);
   };
 
   // Switch Zone
@@ -886,6 +924,10 @@ export default function WarehouseControlCenter() {
             viewMode={viewMode}
             onChangeViewMode={setViewMode}
             tasksBySlot={tasksBySlot}
+            isTransferMode={isTransferMode}
+            sourceTransferSlot={sourceTransferSlot}
+            onSelectTransferTarget={handleSelectTransferTarget}
+            onCancelTransferMode={handleCancelTransferMode}
           />
         </main>
 
@@ -1069,35 +1111,92 @@ export default function WarehouseControlCenter() {
                 </span>
 
                 <div className="grid grid-cols-1 gap-2">
-                  {/* Nút Điều chuyển hàng */}
-                  <Button
-                    variant="outline"
-                    disabled={!selectedSlotPart}
-                    onClick={() => setTransferModalOpen(true)}
-                    className="w-full justify-start gap-2 border-[#243449] bg-[#121f33] text-white hover:bg-[#1a2b44]"
-                  >
-                    <ArrowRightLeft className="size-4 text-primary" /> Điều chuyển hàng sang ô khác
-                  </Button>
+                  {/* Nếu ô trống: Nút Xếp dỡ & Nhập hàng */}
+                  {!selectedSlotPart ? (
+                    <>
+                      <Button
+                        onClick={() => setPutawayModalOpen(true)}
+                        className="w-full justify-start gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-md shadow-emerald-950/30"
+                      >
+                        <PackagePlus className="size-4" /> Xếp dỡ & Nhập hàng vào ô này
+                      </Button>
 
-                  {/* Nút Tạo yêu cầu Soạn hàng / Picking */}
-                  <Button
-                    variant="outline"
-                    disabled={!selectedSlotPart}
-                    onClick={() => setPickingModalOpen(true)}
-                    className="w-full justify-start gap-2 border-[#243449] bg-[#121f33] text-white hover:bg-[#1a2b44]"
-                  >
-                    <Truck className="size-4 text-sky-400" /> Tạo yêu cầu soạn hàng (Picking)
-                  </Button>
+                      {isTransferMode ? (
+                        <Button
+                          onClick={() => handleSelectTransferTarget(selectedRack.id, selectedSlotIndex)}
+                          className="w-full justify-start gap-2 bg-teal-600 hover:bg-teal-500 text-white font-semibold shadow-md shadow-teal-950/30 animate-pulse"
+                        >
+                          <ArrowRightLeft className="size-4" /> Xác nhận chọn ô này làm đích điều chuyển
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setTargetTransferSlot({ rackId: selectedRack.id, slotIndex: selectedSlotIndex });
+                            setTransferModalOpen(true);
+                          }}
+                          className="w-full justify-start gap-2 border-[#243449] bg-[#121f33] text-[#94a3b8] hover:text-white"
+                        >
+                          <ArrowRightLeft className="size-4 text-teal-400" /> Điều chuyển hàng từ ô khác tới ô này
+                        </Button>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {/* Nút Điều chuyển nhanh bằng 3D click */}
+                      <Button
+                        onClick={handleStart3DTransfer}
+                        className="w-full justify-start gap-2 bg-gradient-to-r from-teal-700 to-emerald-700 hover:from-teal-600 hover:to-emerald-600 text-white font-semibold shadow-md"
+                      >
+                        <ArrowRightLeft className="size-4 text-teal-200" /> Điều chuyển 3D (Chọn ô đích trên mô hình)
+                      </Button>
 
-                  {/* Nút Mở đợt Kiểm kê */}
-                  <Button
-                    variant="outline"
-                    disabled={!selectedSlotPart}
-                    onClick={() => setCountModalOpen(true)}
-                    className="w-full justify-start gap-2 border-[#243449] bg-[#121f33] text-white hover:bg-[#1a2b44]"
-                  >
-                    <ClipboardList className="size-4 text-amber-400" /> Mở đợt kiểm kê ô này
-                  </Button>
+                      {/* Nút Điều chuyển qua form */}
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setSourceTransferSlot({
+                            rackId: selectedRack.id,
+                            rackName: selectedRack.name,
+                            slotIndex: selectedSlotIndex,
+                            part: selectedSlotPart
+                          });
+                          setTargetTransferSlot(null);
+                          setTransferModalOpen(true);
+                        }}
+                        className="w-full justify-start gap-2 border-[#243449] bg-[#121f33] text-white hover:bg-[#1a2b44]"
+                      >
+                        <ArrowRightLeft className="size-4 text-primary" /> Mở bảng điều chuyển chi tiết
+                      </Button>
+
+                      {/* Nút Tạo yêu cầu Soạn hàng / Picking */}
+                      <Button
+                        variant="outline"
+                        onClick={() => setPickingModalOpen(true)}
+                        className="w-full justify-start gap-2 border-[#243449] bg-[#121f33] text-white hover:bg-[#1a2b44]"
+                      >
+                        <Truck className="size-4 text-sky-400" /> Tạo yêu cầu soạn hàng (Picking)
+                      </Button>
+
+                      {/* Nút Nhập thêm hàng */}
+                      <Button
+                        variant="outline"
+                        onClick={() => setPutawayModalOpen(true)}
+                        className="w-full justify-start gap-2 border-[#243449] bg-[#121f33] text-[#94a3b8] hover:text-white"
+                      >
+                        <PackagePlus className="size-4 text-emerald-400" /> Nhập thêm hàng vào ô này
+                      </Button>
+
+                      {/* Nút Mở đợt Kiểm kê */}
+                      <Button
+                        variant="outline"
+                        onClick={() => setCountModalOpen(true)}
+                        className="w-full justify-start gap-2 border-[#243449] bg-[#121f33] text-white hover:bg-[#1a2b44]"
+                      >
+                        <ClipboardList className="size-4 text-amber-400" /> Mở đợt kiểm kê ô này
+                      </Button>
+                    </>
+                  )}
 
                   {/* Nút Mở sơ đồ chi tiết */}
                   <Button
@@ -1144,40 +1243,68 @@ export default function WarehouseControlCenter() {
       </div>
 
       {/* 4. MODALS FOR BUSINESS ACTIONS */}
-      {selectedRack && selectedSlotPart && (
+      {selectedRack && (
         <>
-          <QuickTransferModal
-            open={transferModalOpen}
-            onClose={() => setTransferModalOpen(false)}
-            sourceRack={selectedRack}
-            sourceSlotIndex={selectedSlotIndex}
-            sourcePart={selectedSlotPart}
+          <QuickPutawayModal
+            open={putawayModalOpen}
+            onClose={() => setPutawayModalOpen(false)}
+            targetRack={selectedRack}
+            targetSlotIndex={selectedSlotIndex ?? 0}
             onSuccess={() => {
               void Promise.allSettled([refetchParts(), refetchRacks()]);
             }}
           />
 
-          <QuickPickingModal
-            open={pickingModalOpen}
-            onClose={() => setPickingModalOpen(false)}
-            part={selectedSlotPart}
-            rack={selectedRack}
-            slotIndex={selectedSlotIndex}
+          <QuickTransferModal
+            open={transferModalOpen}
+            onClose={() => {
+              setTransferModalOpen(false);
+              setTargetTransferSlot(null);
+            }}
+            sourceRack={
+              (sourceTransferSlot?.rackId && rackSummaries.find(r => r.id === sourceTransferSlot.rackId)) ||
+              selectedRack
+            }
+            sourceSlotIndex={sourceTransferSlot?.slotIndex ?? selectedSlotIndex ?? 0}
+            sourcePart={sourceTransferSlot?.part || selectedSlotPart}
+            initialTargetRackId={targetTransferSlot?.rackId || ''}
+            initialTargetSlot={targetTransferSlot?.slotIndex !== undefined ? targetTransferSlot.slotIndex : ''}
+            onRequest3DSelectTarget={() => {
+              handleStart3DTransfer();
+              setTransferModalOpen(false);
+            }}
             onSuccess={() => {
-              void Promise.allSettled([refetchParts(), refetchRacks(), dispatchesQuery.refetch()]);
+              void Promise.allSettled([refetchParts(), refetchRacks()]);
+              setSourceTransferSlot(null);
+              setTargetTransferSlot(null);
             }}
           />
 
-          <QuickCycleCountModal
-            open={countModalOpen}
-            onClose={() => setCountModalOpen(false)}
-            part={selectedSlotPart}
-            rack={selectedRack}
-            slotIndex={selectedSlotIndex}
-            onSuccess={() => {
-              void cycleCountsQuery.refetch();
-            }}
-          />
+          {selectedSlotPart && (
+            <>
+              <QuickPickingModal
+                open={pickingModalOpen}
+                onClose={() => setPickingModalOpen(false)}
+                part={selectedSlotPart}
+                rack={selectedRack}
+                slotIndex={selectedSlotIndex}
+                onSuccess={() => {
+                  void Promise.allSettled([refetchParts(), refetchRacks(), dispatchesQuery.refetch()]);
+                }}
+              />
+
+              <QuickCycleCountModal
+                open={countModalOpen}
+                onClose={() => setCountModalOpen(false)}
+                part={selectedSlotPart}
+                rack={selectedRack}
+                slotIndex={selectedSlotIndex}
+                onSuccess={() => {
+                  void cycleCountsQuery.refetch();
+                }}
+              />
+            </>
+          )}
         </>
       )}
     </div>

@@ -1,0 +1,218 @@
+{
+  "baseline": {
+    "previousTransfer19Pcs": {
+      "id": "f5a1d7e6-4fdf-47b6-896f-7c9aeb3dc62b",
+      "type": "transfer",
+      "product_code": "DQA-NAMNGU-VANG",
+      "quantity_pcs": 19,
+      "from_slot": 2,
+      "to_slot": 18,
+      "created_at": "2026-11-17T12:37:18.455Z"
+    },
+    "recentDispatches": [
+      {
+        "id": "59a756c2-bfcc-4333-824e-8ae323594f07",
+        "reference": "DISP-QA-552547",
+        "status": "PICKED",
+        "sku": "DQA-NAMNGU-VANG",
+        "quantity": 2,
+        "allocated_qty": 2
+      },
+      {
+        "id": "e074b510-8085-4020-b4e8-de2e880bd505",
+        "reference": "DISP-QA-886642",
+        "status": "PICKED",
+        "sku": "DQA-NAMNGU-VANG",
+        "quantity": 2,
+        "allocated_qty": 2
+      },
+      {
+        "id": "d809dbcf-85c5-4e85-94dd-d050fd48eae7",
+        "reference": "DISP-QA-E2E-55876",
+        "status": "PICKED",
+        "sku": "DQA-NAMNGU-VANG",
+        "quantity": 10,
+        "allocated_qty": 10
+      },
+      {
+        "id": "66fcd7d0-644c-4e0f-8184-a0d436e18648",
+        "reference": "RETRY-835C0A47",
+        "status": "CANCELLED",
+        "sku": "QA-COMP-835C0A47",
+        "quantity": 10,
+        "allocated_qty": 10
+      },
+      {
+        "id": "0f4d953a-bc66-4753-a920-34b2f0ff9ba3",
+        "reference": "RB-835C0A47",
+        "status": "CANCELLED",
+        "sku": "QA-COMP-835C0A47",
+        "quantity": 30,
+        "allocated_qty": 30
+      }
+    ],
+    "recentCycleCounts": [
+      {
+        "id": "0b6ef001-d6ee-4147-91ab-f8776e2cfb48",
+        "status": "CLOSED",
+        "part_id": "029e1982-453b-4698-8576-79ae0849031c",
+        "snapshot": {
+          "weight": 38,
+          "cartons": 4,
+          "quantity": 38,
+          "revision": "9591"
+        },
+        "first_result": {
+          "weight": 38,
+          "cartons": 4,
+          "quantity": 38
+        },
+        "second_result": {
+          "weight": 38,
+          "cartons": 4,
+          "quantity": 38
+        },
+        "assessor_id": "e490b1bd-50c5-4280-b975-9ec0f9b3d8d1",
+        "created_at": "2026-11-17T13:36:03.297Z"
+      },
+      {
+        "id": "9b46b367-383c-4616-b2c0-a3ae70d9afc8",
+        "status": "CLOSED",
+        "part_id": "5f519510-c5a0-4e73-905c-721c2f6f977e",
+        "snapshot": {
+          "weight": 3.8,
+          "cartons": 2,
+          "quantity": 19,
+          "revision": "9952"
+        },
+        "first_result": {
+          "weight": 3.8,
+          "cartons": 2,
+          "quantity": 19
+        },
+        "second_result": {
+          "weight": 3.8,
+          "cartons": 2,
+          "quantity": 19
+        },
+        "assessor_id": "e490b1bd-50c5-4280-b975-9ec0f9b3d8d1",
+        "created_at": "2026-11-17T12:37:40.669Z"
+      },
+      {
+        "id": "36aaf072-7cdd-4068-8e39-9c0ae2bab36c",
+        "status": "CLOSED",
+        "part_id": "5f519510-c5a0-4e73-905c-721c2f6f977e",
+        "snapshot": {
+          "weight": 8,
+          "cartons": 4,
+          "quantity": 40,
+          "revision": "9933"
+        },
+        "first_result": {
+          "weight": 8,
+          "cartons": 4,
+          "quantity": 40
+        },
+        "second_result": {
+          "weight": 8,
+          "cartons": 4,
+          "quantity": 40
+        },
+        "assessor_id": "e490b1bd-50c5-4280-b975-9ec0f9b3d8d1",
+        "created_at": "2026-11-17T12:32:32.485Z"
+      }
+    ]
+  },
+  "syncLatencyMs": 1184,
+  "transferRecon": {
+    "srcPartId": "58a9f2b2-dbd6-4179-b0d5-a8052fed1829",
+    "sku": "DQA-CHINSU-NM",
+    "fromSlot": 0,
+    "toSlot": 6,
+    "qtyTransferred": 4,
+    "preTransferQty": 40,
+    "postTransferQty": 36,
+    "latencyMs": 1184
+  },
+  "pickingLifecycle": {
+    "dispatchId": "dd664c1f-cf00-4bd5-8441-8836d14eb864",
+    "sku": "DQA-NAMNGU-VANG",
+    "lot": "DQA-NAMNGU-VANG-L2",
+    "slot": 7,
+    "qty": 2,
+    "statusReserved": "RESERVED",
+    "statusPicked": "PICKED",
+    "doublePickStatus": 201,
+    "staffRbacStatus": 403
+  },
+  "cycleCountRecon": {
+    "cycleCountId": "6c110d0f-660b-450d-b6c1-bc9bc1d9df4f",
+    "rack": "R19",
+    "slot": 10,
+    "round1Status": "SECOND",
+    "round2Status": "REVIEW",
+    "finalStatus": "CLOSED"
+  },
+  "offlineRecovery": {
+    "detectedOffline": true,
+    "restoredOnline": true
+  },
+  "concurrencyCheck": null,
+  "searchFocus": null,
+  "reconciliation": {
+    "parts": 545,
+    "containers": 44,
+    "warehouse_zones": 22,
+    "inventory_transactions": 771,
+    "cycle_counts": 22,
+    "dispatch_orders": 330,
+    "dispatch_allocations": 331,
+    "dispatch_events": 940
+  },
+  "screenshots": [
+    {
+      "file": "sync_01_manager_session_overview.png",
+      "caption": "Phiên Trưởng kho (Manager) - Tổng quan Control Center 3D với huy hiệu Trực tuyến"
+    },
+    {
+      "file": "sync_02_staff_session_overview.png",
+      "caption": "Phiên Nhân viên kho (Staff) - Màn hình điều hành sẵn sàng đồng bộ không reload"
+    },
+    {
+      "file": "sync_03_staff_auto_updated_no_reload.png",
+      "caption": "Phiên Nhân viên kho tự động đồng bộ ô 6 không cần reload (1184ms)"
+    },
+    {
+      "file": "sync_04_manager_view_after_transfer.png",
+      "caption": "Phiên Trưởng kho hiển thị tồn kho đã cập nhật sau điều chuyển"
+    },
+    {
+      "file": "sync_05_picking_active_slot_tag.png",
+      "caption": "Thẻ nhiệm vụ 3D SOẠN HÀNG và panel tác vụ hiển thị tại ô 7"
+    },
+    {
+      "file": "sync_06_cycle_count_completed_sync.png",
+      "caption": "Phiên Nhân viên kho ghi nhận phiếu kiểm kê đã phê duyệt"
+    },
+    {
+      "file": "sync_07_offline_detection_banner.png",
+      "caption": "Phát hiện mất kết nối mạng và hiển thị cảnh báo dữ liệu cũ"
+    },
+    {
+      "file": "sync_08_reconnected_and_resynced.png",
+      "caption": "Tự động khôi phục kết nối và thông báo đồng bộ lại thành công"
+    },
+    {
+      "file": "sync_09_search_auto_focus.png",
+      "caption": "Tìm kiếm nhanh SKU DQA-CHINSU-NM và tự động lấy nét vào ô kệ"
+    },
+    {
+      "file": "sync_10_inspector_active_task_panel.png",
+      "caption": "Panel thanh tra chi tiết hiển thị thẻ nhiệm vụ và thông tin vận hành tại ô lưu trữ"
+    },
+    {
+      "file": "sync_11_simulation_labeling_verified.png",
+      "caption": "Nút Hành trình 3D (Mô phỏng) được dán nhãn phân định rõ ràng với dữ liệu thực tế"
+    }
+  ]
+}

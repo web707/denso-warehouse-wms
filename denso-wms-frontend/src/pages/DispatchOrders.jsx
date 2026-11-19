@@ -6,22 +6,63 @@ import { useAuth } from '@/lib/auth';
 import { useStore } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  PackageCheck,
+  Send,
+  Boxes,
+  Truck,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  XCircle,
+  FileText,
+  Printer,
+  ChevronDown,
+  Layers,
+  ArrowRight,
+  ShieldAlert,
+} from 'lucide-react';
 
 const route = '/inventory/dispatches';
-const status = { RESERVED: 'Đã giữ', PICKED: 'Đã soạn', SHIPPED: 'Đã xuất', CANCELLED: 'Đã hủy' };
-const packingStatus = { NOT_STARTED: 'Chưa đóng gói', PARTIAL: 'Đóng gói một phần', COMPLETE: 'Đã đóng gói đủ', CANCELLED: 'Đã hủy' };
+const statusMeta = {
+  RESERVED: { label: 'Đã giữ tồn (FEFO)', tone: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
+  PICKED: { label: 'Đã soạn hàng', tone: 'text-sky-400 bg-sky-500/10 border-sky-500/20' },
+  SHIPPED: { label: 'Đã xuất kho', tone: 'text-masan-emerald bg-masan-emerald/10 border-masan-emerald/20' },
+  CANCELLED: { label: 'Đã hủy', tone: 'text-rose-400 bg-rose-500/10 border-rose-500/20' },
+};
+
+const packingStatusMeta = {
+  NOT_STARTED: { label: 'Chưa đóng gói', tone: 'text-masan-muted bg-masan-elevated border-masan-border' },
+  PARTIAL: { label: 'Đóng gói một phần', tone: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
+  COMPLETE: { label: 'Đã đóng gói đủ', tone: 'text-masan-emerald bg-masan-emerald/10 border-masan-emerald/20' },
+  CANCELLED: { label: 'Đã hủy', tone: 'text-rose-400 bg-rose-500/10 border-rose-500/20' },
+};
 
 function PackingDetails({ order, canWrite }) {
   const [open, setOpen] = useState(false);
-  return <details className="space-y-2" onToggle={event => setOpen(event.currentTarget.open)}>
-    <summary className="cursor-pointer text-sm font-medium">Phiếu đóng gói</summary>
-    {open && <PackingList order={order} canWrite={canWrite} />}
-  </details>;
+  return (
+    <details
+      className="group rounded-xl border border-masan-border bg-masan-elevated/50 transition-all"
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary className="flex cursor-pointer items-center justify-between p-3 text-xs font-semibold text-masan-text hover:text-masan-teal select-none">
+        <span className="flex items-center gap-1.5">
+          <Boxes className="w-3.5 h-3.5 text-masan-teal" />
+          Phiếu đóng gói chi tiết theo quy cách
+        </span>
+        <ChevronDown className="w-4 h-4 transition-transform group-open:rotate-180 text-masan-muted" />
+      </summary>
+      {open && <PackingList order={order} canWrite={canWrite} />}
+    </details>
+  );
 }
 
 function PackingList({ order, canWrite }) {
   const path = `${route}/${order.id}/packing`;
-  const packing = useQuery({ queryKey: ['dispatch-packing', order.id, order.status], queryFn: () => request(path) });
+  const packing = useQuery({
+    queryKey: ['dispatch-packing', order.id, order.status],
+    queryFn: () => request(path),
+  });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const pending = useRef(null);
@@ -46,20 +87,69 @@ function PackingList({ order, canWrite }) {
     }
   }
 
-  if (packing.isPending) return <p>Đang tải phiếu đóng gói…</p>;
-  if (packing.isError) return <p role="alert">Không tải được phiếu đóng gói.</p>;
-  return <section className="space-y-2 rounded-lg border p-3 text-sm" aria-label="Phiếu đóng gói">
-    <p role="status">{packingStatus[packing.data.packingStatus]}</p>
-    {error && <p role="alert" className="text-red-500">{error}</p>}
-    {packing.data.lines.map(line => <div className="space-y-1" key={line.partId}>
-      <p>{packing.data.sku} · {line.lotNumber} · PART {line.partId} · Đã đóng {line.packed}/{line.picked}</p>
-      {canWrite && order.status === 'PICKED' && line.packed < line.picked &&
-        <form className="flex flex-wrap items-end gap-2" onSubmit={event => pack(event, line.partId)}>
-          <label>Số lượng đóng gói<Input name="quantity" required type="number" min={1} max={line.picked - line.packed} /></label>
-          <Button disabled={busy}>Ghi đóng gói</Button>
-        </form>}
-    </div>)}
-  </section>;
+  if (packing.isPending) return <p className="p-3 text-xs text-masan-muted">Đang tải phiếu đóng gói…</p>;
+  if (packing.isError) return <p role="alert" className="p-3 text-xs text-rose-400">Không tải được phiếu đóng gói.</p>;
+
+  const packMeta = packingStatusMeta[packing.data.packingStatus] || {
+    label: packing.data.packingStatus,
+    tone: 'text-masan-muted bg-masan-elevated border-masan-border',
+  };
+
+  return (
+    <section className="space-y-3 p-3.5 border-t border-masan-border/60 text-xs" aria-label="Phiếu đóng gói">
+      <div className="flex items-center justify-between">
+        <span className="text-masan-muted">Trạng thái đóng kiện:</span>
+        <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold ${packMeta.tone}`}>
+          <span className="w-1.5 h-1.5 rounded-full bg-current" />
+          {packMeta.label}
+        </span>
+      </div>
+
+      {error && <p role="alert" className="text-rose-400 text-xs">{error}</p>}
+
+      <div className="space-y-2">
+        {packing.data.lines.map((line) => (
+          <div
+            key={line.partId}
+            className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg border border-masan-border bg-masan-surface p-2.5"
+          >
+            <div>
+              <span className="font-mono font-bold text-masan-text">{packing.data.sku}</span> ·{' '}
+              <span className="text-masan-teal font-mono">Lô: {line.lotNumber}</span>
+              <div className="text-[11px] text-masan-muted mt-0.5">
+                PART: {line.partId} · Tiến độ đóng: <b className="text-masan-emerald font-mono">{line.packed}</b> /{' '}
+                <span className="font-mono">{line.picked}</span>
+              </div>
+            </div>
+
+            {canWrite && order.status === 'PICKED' && line.packed < line.picked && (
+              <form className="flex items-center gap-2" onSubmit={(event) => pack(event, line.partId)}>
+                <label className="flex items-center gap-1 text-[11px] text-masan-muted">
+                  SL:
+                  <Input
+                    name="quantity"
+                    required
+                    type="number"
+                    min={1}
+                    max={line.picked - line.packed}
+                    placeholder={String(line.picked - line.packed)}
+                    className="w-20 h-7 bg-masan-elevated border-masan-border text-xs text-masan-text font-mono"
+                  />
+                </label>
+                <Button
+                  disabled={busy}
+                  size="sm"
+                  className="h-7 text-xs bg-masan-emerald hover:bg-masan-emerald/90 text-slate-950 font-bold"
+                >
+                  Ghi đóng gói
+                </Button>
+              </form>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 export default function DispatchOrders() {
@@ -73,6 +163,7 @@ export default function DispatchOrders() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const pending = useRef(null);
+
   const stock = useQuery({
     queryKey: ['dispatch-stock', sku],
     enabled: !!sku.trim(),
@@ -84,7 +175,7 @@ export default function DispatchOrders() {
     queryFn: () => request(route),
   });
 
-  const skus = [...new Set(parts.map(part => part.productCode).filter(Boolean))].sort();
+  const skus = [...new Set(parts.map((part) => part.productCode).filter(Boolean))].sort();
 
   async function run(action, shipped = false) {
     setBusy(true);
@@ -122,38 +213,279 @@ export default function DispatchOrders() {
     run(() => request(`${route}/${orderId}/${actionName}`, { method: 'POST' }), actionName === 'ship');
   };
 
-  return <main className="mx-auto max-w-6xl space-y-5 p-4 md:p-7">
-    <h1 className="text-2xl font-semibold">Đơn xuất kho</h1>
-    {canWrite && <form onSubmit={reserve} className="grid gap-3 rounded-xl border bg-card p-4 md:grid-cols-3">
-      <label className="text-sm">Mã đơn<Input required maxLength={100} value={reference} onChange={event => setReference(event.target.value)} /></label>
-      <label className="text-sm">SKU<Input required list="dispatch-skus" maxLength={120} value={sku} onChange={event => setSku(event.target.value)} /></label>
-      <datalist id="dispatch-skus">{skus.map(value => <option key={value} value={value} />)}</datalist>
-      <label className="text-sm">Số lượng yêu cầu<Input required type="number" min={1} value={quantity} onChange={event => setQuantity(event.target.value)} /></label>
-      {sku.trim() && <p className="text-sm text-muted-foreground md:col-span-3">
-        {stock.isPending ? 'Đang tải tồn…' : stock.isError ? 'Không tải được tồn.' :
-          `Tồn đã xếp: ${stock.data.physicalPlaced} · Đã giữ: ${stock.data.held} · Có thể cấp phát: ${stock.data.available}`}
-      </p>}
-      <Button disabled={busy}>Giữ tồn theo FEFO</Button>
-    </form>}
-    {error && <p role="alert" className="text-red-500">{error}</p>}
-    {message && <p role="status" className="text-primary">{message}</p>}
-    {orders.isPending && <p>Đang tải đơn…</p>}
-    {!orders.data?.length && orders.isError && <p role="alert">Không tải được đơn xuất.</p>}
-    {orders.data?.map(order => <article key={order.id} className="space-y-2 rounded-xl border bg-card p-4">
-      <h2 className="font-semibold">{order.reference} · {status[order.status] || order.status}</h2>
-      <div className="flex flex-wrap gap-2">
-        <DocumentSourceButton kind="02-VT" reference={order.id}>In phiếu 02-VT</DocumentSourceButton>
-        <DocumentSourceButton kind="PICKING" reference={order.id}>In Picking List</DocumentSourceButton>
-        <DocumentSourceButton kind="PACKING" reference={order.id}>In Packing List</DocumentSourceButton>
+  return (
+    <div className="space-y-6">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-masan-border pb-5">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-masan-text">
+              Đơn xuất kho & Chu trình Soạn 2 bước
+            </h1>
+            <span className="rounded-full bg-masan-emerald/10 border border-masan-emerald/20 px-2.5 py-0.5 text-[11px] font-semibold text-masan-emerald">
+              FEFO Reservation Workflow
+            </span>
+          </div>
+          <p className="text-sm text-masan-muted mt-1 max-w-3xl">
+            Quy trình xuất kho nghiêm ngặt: Giữ tồn theo FEFO (RESERVED) → Xác nhận soạn hàng (PICKED) → Đóng gói & Bàn giao xuất kho (SHIPPED).
+          </p>
+        </div>
       </div>
-      <p className="text-sm">{order.sku} · Yêu cầu {order.quantity} · Đang giữ {['RESERVED','PICKED'].includes(order.status) ? order.quantity : 0}</p>
-      <ul className="text-sm text-muted-foreground">{(order.allocations || []).map(row => <li key={row.partId}>{row.lotNumber} · {row.quantity} đơn vị</li>)}</ul>
-      {order.status !== 'RESERVED' && <PackingDetails order={order} canWrite={canWrite} />}
-      {canWrite && ['RESERVED','PICKED'].includes(order.status) && <div className="flex flex-wrap gap-2">
-        {order.status === 'RESERVED' ? <Button type="button" disabled={busy} onClick={() => handleAction(order.id, 'pick')}>Xác nhận soạn</Button> :
-          <Button type="button" disabled={busy} onClick={() => handleAction(order.id, 'ship')}>Xác nhận xuất</Button>}
-        <Button type="button" variant="outline" disabled={busy} onClick={() => handleAction(order.id, 'cancel')}>Hủy giữ tồn</Button>
-      </div>}
-    </article>)}
-  </main>;
+
+      {/* Reservation Form */}
+      {canWrite && (
+        <form
+          onSubmit={reserve}
+          className="grid gap-4 rounded-2xl border border-masan-border bg-masan-surface p-5 shadow-lg md:grid-cols-3"
+        >
+          <div className="md:col-span-3 border-b border-masan-border pb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <PackageCheck className="w-4 h-4 text-masan-teal" />
+              <h2 className="text-sm font-bold text-masan-text">Tạo đơn xuất & Giữ tồn theo chuẩn FEFO</h2>
+            </div>
+            <span className="text-[11px] text-masan-muted">Tự động ưu tiên lô cận hạn dùng trước</span>
+          </div>
+
+          <label className="text-xs font-medium text-masan-text">
+            Mã đơn / SO Reference *
+            <Input
+              required
+              maxLength={100}
+              placeholder="VD: SO-2026-FMCG-01"
+              value={reference}
+              onChange={(event) => setReference(event.target.value)}
+              className="mt-1 bg-masan-elevated border-masan-border text-masan-text text-xs focus:border-masan-emerald"
+            />
+          </label>
+
+          <label className="text-xs font-medium text-masan-text">
+            Mã SKU sản phẩm *
+            <Input
+              required
+              list="dispatch-skus"
+              maxLength={120}
+              placeholder="Chọn hoặc nhập SKU"
+              value={sku}
+              onChange={(event) => setSku(event.target.value)}
+              className="mt-1 bg-masan-elevated border-masan-border text-masan-text text-xs focus:border-masan-emerald font-mono"
+            />
+          </label>
+          <datalist id="dispatch-skus">
+            {skus.map((value) => (
+              <option key={value} value={value} />
+            ))}
+          </datalist>
+
+          <label className="text-xs font-medium text-masan-text">
+            Số lượng yêu cầu (cái) *
+            <Input
+              required
+              type="number"
+              min={1}
+              placeholder="VD: 50"
+              value={quantity}
+              onChange={(event) => setQuantity(event.target.value)}
+              className="mt-1 bg-masan-elevated border-masan-border text-masan-text text-xs focus:border-masan-emerald font-mono"
+            />
+          </label>
+
+          {/* Live stock availability visualizer */}
+          {sku.trim() && (
+            <div className="md:col-span-3 rounded-xl border border-masan-border bg-masan-elevated/70 p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+              {stock.isPending ? (
+                <span className="text-masan-muted">Đang tra cứu tồn kho thực tế...</span>
+              ) : stock.isError ? (
+                <span className="text-rose-400">Không nạp được thông tin tồn kho SKU.</span>
+              ) : (
+                <>
+                  <div className="flex items-center gap-1.5 text-masan-muted">
+                    <Boxes className="w-3.5 h-3.5 text-masan-teal" />
+                    <span>
+                      Tồn trên kệ:{' '}
+                      <b className="text-masan-text font-mono">{stock.data.physicalPlaced}</b>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-masan-muted">
+                    <Clock className="w-3.5 h-3.5 text-amber-400" />
+                    <span>
+                      Đang giữ đơn khác:{' '}
+                      <b className="text-amber-400 font-mono">{stock.data.held}</b>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-masan-emerald" />
+                    <span className="text-masan-muted">
+                      Có thể cấp phát:{' '}
+                      <b className="text-masan-emerald font-mono font-bold text-sm">
+                        {stock.data.available}
+                      </b>{' '}
+                      đv
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          <div className="md:col-span-3 flex justify-end">
+            <Button
+              disabled={busy}
+              className="bg-masan-emerald hover:bg-masan-emerald/90 text-slate-950 font-bold shadow-md shadow-emerald-950/20 text-xs h-10 px-6"
+            >
+              {busy ? 'Đang cấp phát...' : 'Cấp phát & Giữ tồn theo FEFO'}
+            </Button>
+          </div>
+        </form>
+      )}
+
+      {error && (
+        <div role="alert" className="p-3.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-xs flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {message && (
+        <div role="status" className="p-3.5 rounded-xl border border-masan-emerald/30 bg-masan-emerald/10 text-masan-emerald text-xs flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4" />
+          <span>{message}</span>
+        </div>
+      )}
+
+      {orders.isPending && (
+        <div className="p-8 text-center text-masan-muted text-xs animate-pulse">
+          Đang nạp danh sách đơn xuất kho...
+        </div>
+      )}
+
+      {!orders.data?.length && orders.isError && (
+        <div role="alert" className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-xs">
+          Không tải được danh sách đơn xuất kho.
+        </div>
+      )}
+
+      {/* Orders List */}
+      <div className="space-y-4">
+        {orders.data?.map((order) => {
+          const meta = statusMeta[order.status] || {
+            label: order.status,
+            tone: 'text-masan-muted bg-masan-elevated border-masan-border',
+          };
+          const isReserved = order.status === 'RESERVED';
+          const isPicked = order.status === 'PICKED';
+
+          return (
+            <article
+              key={order.id}
+              className="space-y-4 rounded-2xl border border-masan-border bg-masan-surface p-5 shadow-lg transition-all hover:border-masan-border/80"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-masan-border/60 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400">
+                    <Truck className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-masan-text font-mono text-sm">{order.reference}</span>
+                      <span className="text-xs text-masan-teal font-mono">{order.sku}</span>
+                    </div>
+                    <div className="text-xs text-masan-muted mt-0.5">
+                      Yêu cầu:{' '}
+                      <b className="text-masan-text font-mono">{order.quantity}</b> đv · Đang giữ:{' '}
+                      <b className="text-amber-400 font-mono">
+                        {['RESERVED', 'PICKED'].includes(order.status) ? order.quantity : 0}
+                      </b>{' '}
+                      đv
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${meta.tone}`}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                    {meta.label}
+                  </span>
+                </div>
+              </div>
+
+              {/* Allocations breakdown */}
+              {order.allocations?.length > 0 && (
+                <div className="rounded-xl border border-masan-border bg-masan-elevated/40 p-3 space-y-1.5">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-masan-muted flex items-center gap-1">
+                    <Layers className="w-3.5 h-3.5 text-masan-teal" />
+                    Phân bổ lô hàng (Allocation FEFO):
+                  </div>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {order.allocations.map((row) => (
+                      <span
+                        key={row.partId}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-masan-border bg-masan-surface px-2.5 py-1 text-xs font-mono text-masan-text"
+                      >
+                        <span className="text-masan-teal">Lô: {row.lotNumber}</span>
+                        <span className="text-masan-muted">|</span>
+                        <span className="text-masan-emerald font-bold">{row.quantity} đv</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Document Actions */}
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <DocumentSourceButton kind="02-VT" reference={order.id}>
+                  Phiếu xuất 02-VT
+                </DocumentSourceButton>
+                <DocumentSourceButton kind="PICKING" reference={order.id}>
+                  Picking List
+                </DocumentSourceButton>
+                <DocumentSourceButton kind="PACKING" reference={order.id}>
+                  Packing List
+                </DocumentSourceButton>
+              </div>
+
+              {/* Packing Details Dropdown */}
+              {order.status !== 'RESERVED' && <PackingDetails order={order} canWrite={canWrite} />}
+
+              {/* State Transition Actions */}
+              {canWrite && ['RESERVED', 'PICKED'].includes(order.status) && (
+                <div className="flex flex-wrap items-center gap-2.5 pt-2 border-t border-masan-border/40">
+                  {isReserved ? (
+                    <Button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => handleAction(order.id, 'pick')}
+                      className="bg-masan-emerald hover:bg-masan-emerald/90 text-slate-950 font-bold text-xs h-9 px-4"
+                    >
+                      <PackageCheck className="w-3.5 h-3.5 mr-1.5" />
+                      Xác nhận đã soạn (PICKED)
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => handleAction(order.id, 'ship')}
+                      className="bg-sky-500 hover:bg-sky-600 text-slate-950 font-bold text-xs h-9 px-4"
+                    >
+                      <Truck className="w-3.5 h-3.5 mr-1.5" />
+                      Xác nhận xuất kho (SHIPPED)
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => handleAction(order.id, 'cancel')}
+                    className="border-rose-500/30 text-rose-400 hover:bg-rose-500/10 text-xs h-9 px-4"
+                  >
+                    <XCircle className="w-3.5 h-3.5 mr-1.5" />
+                    Hủy giữ tồn
+                  </Button>
+                </div>
+              )}
+            </article>
+          );
+        })}
+      </div>
+    </div>
+  );
 }

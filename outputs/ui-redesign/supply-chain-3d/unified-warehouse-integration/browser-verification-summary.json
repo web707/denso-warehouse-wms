@@ -1,0 +1,64 @@
+{
+  "timestamp": "2026-11-17T05:07:12.278Z",
+  "zone": "ZONE-A",
+  "racks": 3,
+  "totalSlots": 60,
+  "occupiedSlots": 25,
+  "performance": {
+    "fps": 34,
+    "heapMb": "29.0"
+  },
+  "screenshots": [
+    {
+      "file": "01_racks_zone_a_overview.png",
+      "description": "Sơ đồ kho 3D Zone A - 3 kệ công nghiệp R01, R02, R03 với 25/60 ô có hàng"
+    },
+    {
+      "file": "02_racks_r01_selected.png",
+      "description": "Kệ R01 được chọn - Chi tiết 10/20 ô (50%), 14 PART, nút điều hướng Hành trình 3D"
+    },
+    {
+      "file": "03_operational_replay_overview.png",
+      "description": "Hành trình 3D Operational Replay - Mô hình kho dùng chung với 3 kệ Zone A"
+    },
+    {
+      "file": "04_operational_qc_inspection.png",
+      "description": "Operational Replay tại trạm QC - Kiểm tra QC hợp lệ trước khi putaway"
+    },
+    {
+      "file": "05_sandbox_putaway_r01_s01_placed.png",
+      "description": "Sandbox Putaway hoàn thành trên R01:S01 - Pallet đặt chuẩn cao độ, càng đã rút"
+    },
+    {
+      "file": "06_sandbox_putaway_r02_s10_placed.png",
+      "description": "Sandbox Putaway hoàn thành trên R02:S10 (Tầng 2, Bay 5) - Không va chạm"
+    },
+    {
+      "file": "07_sandbox_putaway_r03_s05_placed.png",
+      "description": "Sandbox Putaway hoàn thành trên R03:S05 (Tầng 1, Bay 5)"
+    },
+    {
+      "file": "08_sandbox_putaway_occupied_blocked.png",
+      "description": "Ô bị chiếm chỗ (OCCUPIED) - Hoạt cảnh dừng BLOCKED, cảnh báo va chạm"
+    },
+    {
+      "file": "09_sandbox_picking_initial_100pcs.png",
+      "description": "Partial Picking 20/100 ban đầu (0%) - 100 đơn vị nguyên vẹn trên kệ"
+    },
+    {
+      "file": "10_sandbox_picking_lift_20pcs.png",
+      "description": "Partial Picking tách 20 đơn vị (40%) - 80 đơn vị giữ tại vị trí, 20 đơn vị trên càng"
+    },
+    {
+      "file": "11_sandbox_picking_completed_80_20.png",
+      "description": "Partial Picking hoàn thành (100%) - 20 đơn vị tập kết xuất, 80 đơn vị yên vị trên kệ"
+    },
+    {
+      "file": "12_sandbox_picking_reverse_scrub.png",
+      "description": "Tua ngược timeline về 0% - Khôi phục hoàn toàn trạng thái 100 đơn vị không biến dạng"
+    }
+  ],
+  "sandboxMutations": 0,
+  "apiCallsInSandbox": 0,
+  "status": "ALL_PASS"
+}

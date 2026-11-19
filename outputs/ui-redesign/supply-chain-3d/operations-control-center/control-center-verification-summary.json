@@ -1,0 +1,62 @@
+{
+  "timestamp": "2026-11-17T11:55:10.742Z",
+  "zone": "ZONE-A",
+  "racks": 3,
+  "totalSlots": 60,
+  "occupiedSlots": 25,
+  "performance": {
+    "heapMb": 32,
+    "status": "OPTIMAL"
+  },
+  "screenshots": [
+    {
+      "file": "01_control_center_overview.png",
+      "description": "Tổng quan Trung tâm Điều hành Kho 3D - Dark Enterprise Theme với mô hình 3D trung tâm, thanh KPI summary, sidebar và panel chi tiết"
+    },
+    {
+      "file": "02_view_mode_heatmap.png",
+      "description": "Chế độ Bản đồ nhiệt (Heatmap) - Trực quan hóa mật độ tồn kho với màu tím (mật độ cao), xanh lá (vừa), cyan (thấp) và ô trống"
+    },
+    {
+      "file": "03_view_mode_space.png",
+      "description": "Chế độ Dung lượng (Space Utilization) - Trực quan hóa tỷ lệ sử dụng tải trọng kg và thể tích m³"
+    },
+    {
+      "file": "04_sidebar_warehouse_tasks.png",
+      "description": "Sidebar trái - Tab Nhiệm vụ kho với danh sách lệnh soạn hàng, điều chuyển, kiểm kê, bộ lọc và biểu đồ phụ tải (Workload Trend)"
+    },
+    {
+      "file": "05_sidebar_aisle_capacity.png",
+      "description": "Sidebar trái - Tab Kệ & Dung lượng hiển thị tổng quan phân khu A và thanh tiến độ năng lực từng dãy kệ (R01, R02, R03)"
+    },
+    {
+      "file": "06_slot_occupied_detail_panel.png",
+      "description": "Panel phải - Chi tiết ô có hàng (R01:S02): SKU, Tên sản phẩm, Lot, ExpiryBadge, số lượng, quy cách, trạng thái QC và lịch sử giao dịch"
+    },
+    {
+      "file": "07_slot_empty_detail_panel.png",
+      "description": "Panel phải - Chi tiết ô trống (R01:S01): Thông báo khả dụng tiếp nhận nhập kho, nút điều chuyển bị vô hiệu hóa an toàn"
+    },
+    {
+      "file": "08_modal_quick_transfer.png",
+      "description": "Hộp thoại Điều chuyển hàng 3D - Tự động điền vị trí nguồn, mặt hàng, số lượng, cho phép chọn kệ đích và ô nhận an toàn"
+    },
+    {
+      "file": "09_modal_quick_picking.png",
+      "description": "Hộp thoại Tạo yêu cầu soạn hàng (Picking) - Điền sẵn SKU, tồn khả dụng, sinh mã đơn xuất và tùy chọn hoàn tất soạn hàng"
+    },
+    {
+      "file": "10_modal_quick_cycle_count.png",
+      "description": "Hộp thoại Mở đợt kiểm kê định kỳ 3D - Tự động điền vị trí, tồn sổ sách, phân công nhân sự kiểm kê vòng 1 và vòng 2 chuẩn SoD"
+    },
+    {
+      "file": "11_rbac_permission_inspection.png",
+      "description": "Kiểm tra Phân quyền RBAC - Cảnh báo SoD khi nhân viên kho không được phép tự mở đợt kiểm kê nếu không có quyền quản lý"
+    },
+    {
+      "file": "12_mobile_tablet_responsive.png",
+      "description": "Giao diện thích ứng trên Máy tính bảng / Thiết bị di động (Tablet Responsive) - Bố cục linh hoạt, điều khiển cảm ứng tối ưu"
+    }
+  ],
+  "status": "ALL_PASS"
+}

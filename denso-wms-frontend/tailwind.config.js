@@ -10,6 +10,21 @@ module.exports = {
   			sm: 'calc(var(--radius) - 4px)'
   		},
   		colors: {
+  			masan: {
+  				bg: '#080F1C',
+  				sidebar: '#0C1625',
+  				surface: '#111E30',
+  				elevated: '#17263B',
+  				border: '#26374C',
+  				emerald: '#10B981',
+  				teal: '#2DD4BF',
+  				primary: '#10B981',
+  				text: '#F8FAFC',
+  				muted: '#94A3B8',
+  				warning: '#F59E0B',
+  				danger: '#F87171',
+  				info: '#60A5FA'
+  			},
   			slate: {
   				'50': 'rgb(var(--slate-50) / <alpha-value>)',
   				'100': 'rgb(var(--slate-100) / <alpha-value>)',
