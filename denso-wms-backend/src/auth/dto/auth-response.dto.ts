@@ -5,7 +5,12 @@ export class UserResponseDto {
   @ApiProperty() id: string;
   @ApiProperty() email: string;
   @ApiProperty({ nullable: true }) fullName: string | null;
+  @ApiProperty({ nullable: true }) department?: string | null;
+  @ApiProperty({ nullable: true }) phone?: string | null;
   @ApiProperty({ enum: UserRole }) role: UserRole;
+  @ApiProperty({ isArray: true, type: String }) permissions?: string[];
+  @ApiProperty() mustChangePassword?: boolean;
+  @ApiProperty({ nullable: true }) lastLoginAt?: Date | null;
 }
 
 export class AuthResponseDto {

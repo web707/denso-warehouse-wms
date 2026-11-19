@@ -36,9 +36,11 @@ import UserManagement from '@/pages/UserManagement';
 import Login from '@/pages/Login';
 import { AuthProvider, useAuth } from '@/lib/auth';
 
-function AdminOnly({ children }) {
+import { canAccessRoute } from '@/lib/access';
+
+function RouteGuard({ route, children }) {
   const { user } = useAuth();
-  return user?.role === 'admin' ? children : <Navigate to="/" replace />;
+  return canAccessRoute(user, route) ? children : <Navigate to="/" replace />;
 }
 
 function ProtectedApp() {
@@ -71,7 +73,7 @@ function ProtectedApp() {
       <Route path="/trace" element={<Traceability />} />
       <Route path="/fefo" element={<FEFO />} />
       <Route path="/catalog" element={<Catalog />} />
-      <Route path="/users" element={<AdminOnly><UserManagement /></AdminOnly>} />
+      <Route path="/users" element={<RouteGuard route="/users"><UserManagement /></RouteGuard>} />
       <Route path="/locations/:rackId/:slotCode" element={<LocationDetail />} />
       <Route path="/zones" element={<Zones />} />
       <Route path="/reports" element={<Reports />} />

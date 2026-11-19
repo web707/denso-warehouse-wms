@@ -9,7 +9,7 @@ import { isDemoMode } from '@/lib/environment';
 import { useStore } from '@/lib/store';
 import { useAuth } from '@/lib/auth';
 import { useTheme } from '@/lib/theme';
-import { ROLE_LABELS, isReadOnly } from '@/lib/access';
+import { ROLE_LABELS, isReadOnly, canAccessRoute } from '@/lib/access';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -122,7 +122,7 @@ function SidebarBody({ collapsed = false, onNavigate, onToggleCollapse }) {
                 {group.label}
               </p>
             )}
-            {group.items.filter((item) => !item.adminOnly || user?.role === 'admin').map((item) => (
+            {group.items.filter((item) => canAccessRoute(user, item.to)).map((item) => (
               <WithTip key={item.to} enabled={collapsed} label={item.label}>
                 <NavLink
                   to={item.to}

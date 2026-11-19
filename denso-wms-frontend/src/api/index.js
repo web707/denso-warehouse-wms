@@ -6,8 +6,17 @@ export const api = {
     login: (username, password) => request('/auth/login', { method: 'POST', body: { username, password } }),
     me: () => request('/auth/me'),
     users: () => request('/auth/users'),
+    getUser: (id) => request(`/auth/users/${id}`),
     createUser: (body) => request('/auth/users', { method: 'POST', body }),
     updateUser: (id, body) => request(`/auth/users/${id}`, { method: 'PATCH', body }),
+    resetPassword: (id, body) => request(`/auth/users/${id}/reset-password`, { method: 'POST', body }),
+    revokeSessions: (id) => request(`/auth/users/${id}/revoke-sessions`, { method: 'POST' }),
+    changePassword: (body) => request('/auth/change-password', { method: 'POST', body }),
+    auditLogs: (params = {}) => {
+      const qs = new URLSearchParams(params).toString();
+      return request(`/auth/audit-logs${qs ? `?${qs}` : ''}`);
+    },
+    rolesMetadata: () => request('/auth/roles-metadata'),
   },
   divisions: { list: () => request('/divisions') },
   rackTypes: { list: () => request('/rack-types') },

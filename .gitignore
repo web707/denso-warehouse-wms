@@ -30,3 +30,6 @@ Thumbs.db
 
 # Vercel / Cloud caches
 .vercel/
+scratch/
+**/scratch/
+.staging-creds.json

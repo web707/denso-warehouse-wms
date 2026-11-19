@@ -6,6 +6,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../entities/user.entity';
 import { AuthenticatedUser } from '../types/authenticated-user.type';
+import { getEffectivePermissions } from '../types/permissions';
 
 export interface JwtAccessPayload {
   sub: string;
@@ -30,11 +31,15 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     if (!user || !user.isActive) {
       throw new UnauthorizedException('User not found or inactive');
     }
+    const effectivePermissions = getEffectivePermissions(user.role, user.permissions);
     return {
       id: user.id,
       email: user.email,
       fullName: user.fullName,
+      department: user.department,
       role: user.role,
+      permissions: effectivePermissions,
+      mustChangePassword: user.mustChangePassword,
     };
   }
 }
