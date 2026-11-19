@@ -61,10 +61,11 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document);
 
-  const port = config.get<number>('port') ?? 5001;
-  await app.listen(port, '127.0.0.1');
+  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : (config.get<number>('port') ?? 5001);
+  const host = process.env.HOST || '0.0.0.0';
+  await app.listen(port, host);
   // eslint-disable-next-line no-console
-  console.log(`MASAN WMS listening on http://localhost:${port}/api (docs at /api/docs)`);
+  console.log(`MASAN WMS listening on http://${host}:${port}/api (docs at /api/docs)`);
 }
 
 bootstrap();

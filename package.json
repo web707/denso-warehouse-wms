@@ -4,6 +4,8 @@
   "description": "Enterprise Warehouse Management System with Three.js 3D Digital Twin & Real-time Operations Control Center",
   "private": true,
   "scripts": {
+    "build": "cd denso-wms-backend && npm run build",
+    "start": "cd denso-wms-backend && npm run start:prod",
     "start:frontend": "cd denso-wms-frontend && npm run dev",
     "start:backend": "cd denso-wms-backend && npm run start:dev",
     "build:frontend": "cd denso-wms-frontend && npm run build",

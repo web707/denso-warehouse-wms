@@ -46,7 +46,7 @@ export function buildTypeOrmOptions(config: ConfigService): TypeOrmModuleOptions
     entities: [join(__dirname, '..', '**', '*.entity.{ts,js}')],
     migrations: [join(__dirname, '..', 'database', 'migrations', '*.{ts,js}')],
     synchronize: false,
-    migrationsRun: false,
+    migrationsRun: true,
     extra: {
       max: config.get<number>('database.poolMax') ?? 25,
       idleTimeoutMillis: 30_000,
