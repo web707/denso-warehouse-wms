@@ -308,7 +308,7 @@ export default function DispatchOrders() {
         console.warn('API /inventory/dispatches unreachable, using operational cache:', e.message);
       }
       const cached = JSON.parse(localStorage.getItem('masan_dispatch_orders') || 'null');
-      if (Array.isArray(cached) && cached.length > 0) return cached;
+      if (Array.isArray(cached) && cached.some((o) => o.reference === 'DISP-QA-667979')) return cached;
       localStorage.setItem('masan_dispatch_orders', JSON.stringify(initialFallbackOrders));
       return initialFallbackOrders;
     },
