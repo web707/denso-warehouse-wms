@@ -117,6 +117,10 @@ function CountCard({ row, user, manager, run }) {
   const qtyDiff =
     latestCount && row.expected ? Number(latestCount.quantity || 0) - Number(row.expected.quantity || 0) : null;
 
+  const passMismatch = row.first_result && row.second_result
+    ? Number(row.first_result.quantity || 0) !== Number(row.second_result.quantity || 0)
+    : false;
+
   return (
     <article className="space-y-4 rounded-2xl border border-masan-border bg-masan-surface p-5 shadow-lg transition-all hover:border-masan-border/80">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-masan-border/60 pb-3">
@@ -139,7 +143,12 @@ function CountCard({ row, user, manager, run }) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {passMismatch && (
+            <span className="rounded-md px-2 py-0.5 text-xs font-semibold bg-amber-500/10 border border-amber-500/30 text-amber-400">
+              Lần 1 ({row.first_result.quantity}) ≠ Lần 2 ({row.second_result.quantity}) · Chờ phân xử lần 3
+            </span>
+          )}
           {qtyDiff !== null && (
             <span
               className={`rounded-md px-2 py-0.5 text-xs font-mono font-semibold border ${
@@ -296,7 +305,7 @@ function CountCard({ row, user, manager, run }) {
               value={reason}
               onChange={(event) => setReason(event.target.value)}
               maxLength={500}
-              placeholder="VD: Hao hụt tự nhiên do bay hơi / Chênh lệch số liệu kiểm tra hợp lệ..."
+              placeholder="VD: Rách móp bao bì thùng carton khi nâng hạ / Lệch quy cách đóng gói lúc nhập..."
               className="mt-1 bg-masan-surface border-masan-border text-masan-text text-xs focus:border-masan-emerald"
             />
           </label>
@@ -349,13 +358,13 @@ export default function CycleCounting() {
         const initial = [
           {
             id: 'cc-demo-01',
-            product_code: 'MSN-FMCG-001',
-            lot_number: 'LOT-NN-202611-01',
+            product_code: 'MSN-CHINSU-01',
+            lot_number: 'LOT-CS-202611-01',
             zone_code: 'ZONE-A',
             rack_name: 'A-01',
             preferred_rack_slot: 0,
             status: 'FIRST',
-            expected: { quantity: 200, cartons: 20, weight: 150 },
+            expected: { quantity: 240, cartons: 10, weight: 72 },
             first_counter: user?.id,
             first_result: null,
             second_counter: null,
@@ -365,19 +374,35 @@ export default function CycleCounting() {
           },
           {
             id: 'cc-demo-02',
-            product_code: 'MSN-FMCG-003',
-            lot_number: 'LOT-KKM-202610-01',
+            product_code: 'MSN-NAMNGU-01',
+            lot_number: 'LOT-NN-202611-01',
             zone_code: 'ZONE-B',
             rack_name: 'B-01',
             preferred_rack_slot: 1,
             status: 'REVIEW',
-            expected: { quantity: 250, cartons: 25, weight: 120 },
+            expected: { quantity: 300, cartons: 20, weight: 310 },
             first_counter: 'counter-1',
-            first_result: { quantity: 245, cartons: 25, weight: 118 },
+            first_result: { quantity: 295, cartons: 20, weight: 305 },
             second_counter: 'counter-2',
-            second_result: { quantity: 248, cartons: 25, weight: 119 },
-            reason: 'Chênh lệch 2 thùng giữa 2 lần đếm',
+            second_result: { quantity: 298, cartons: 20, weight: 308 },
+            reason: 'Lệch 2 chai do vỡ bao bì khi bốc dỡ pallet',
             created_at: new Date(Date.now() - 3600000).toISOString(),
+          },
+          {
+            id: 'cc-demo-03',
+            product_code: 'MSN-OMACHI-01',
+            lot_number: 'LOT-OMA-202611-02',
+            zone_code: 'ZONE-A',
+            rack_name: 'A-02',
+            preferred_rack_slot: 3,
+            status: 'CLOSED',
+            expected: { quantity: 600, cartons: 20, weight: 56 },
+            first_counter: 'counter-1',
+            first_result: { quantity: 600, cartons: 20, weight: 56 },
+            second_counter: 'counter-2',
+            second_result: { quantity: 600, cartons: 20, weight: 56 },
+            reason: 'Khớp 100% tồn sổ sách và thực tế kiểm kê',
+            created_at: new Date(Date.now() - 86400000).toISOString(),
           },
         ];
         localStorage.setItem('masan_cycle_counts', JSON.stringify(initial));

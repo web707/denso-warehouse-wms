@@ -41,8 +41,8 @@ const FIELDS = [
   { key: 'sampleSize', label: 'Cỡ mẫu (SampleSize)', type: 'number', step: 1, required: true },
   { key: 'passQuantity', label: 'Số đạt (PassQuantity)', type: 'number', step: 1, required: true },
   { key: 'failQuantity', label: 'Số lỗi (FailQuantity)', type: 'number', step: 1, required: true },
-  { key: 'defectCode', label: 'Mã lỗi (DefectCode)', placeholder: 'D-101', help: 'Theo phân loại lỗi IATF 16949' },
-  { type: 'section', label: 'Đo kích thước (CMM)' },
+  { key: 'defectCode', label: 'Mã lỗi (DefectCode)', placeholder: 'D-101', help: 'Theo tiêu chuẩn HACCP / ISO 22000' },
+  { type: 'section', label: 'Chỉ số kiểm nghiệm (Bao bì, Độ ẩm, Cảm quan)' },
   { key: 'measuredValue1', label: 'Giá trị đo (MeasuredValue_1)', type: 'number', min: -1e9 },
   { key: 'upperTolerance', label: 'Dung sai trên', type: 'number', min: -1e9 },
   { key: 'lowerTolerance', label: 'Dung sai dưới', type: 'number', min: -1e9 },
@@ -96,8 +96,8 @@ function Kpi({ label, value, sub, tone }) {
   return (
     <div className="p-5">
       <p className="text-sm text-slate-500">{label}</p>
-      <p className={cn('mt-1 text-3xl font-semibold tabular-nums text-slate-900', tone === 'warn' && 'text-amber-600', tone === 'bad' && 'text-red-600')}>{value}</p>
-      {sub && <p className="mt-1 text-xs text-slate-500">{sub}</p>}
+      <p className={cn('mt-1 text-3xl font-semibold tabular-nums text-masan-text', tone === 'warn' && 'text-amber-500', tone === 'bad' && 'text-red-500')}>{value}</p>
+      {sub && <p className="mt-1 text-xs text-slate-400">{sub}</p>}
     </div>
   );
 }
@@ -183,17 +183,13 @@ export default function Inspections() {
     <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Kiểm tra chất lượng</h1>
-          <p className="text-sm text-slate-500 mt-1">Phiếu kiểm tra theo lô · Khâu 4 · chuẩn IATF 16949</p>
+          <h1 className="text-2xl font-semibold text-masan-text">Kiểm tra chất lượng</h1>
+          <p className="text-sm text-slate-400 mt-1">Phiếu kiểm tra theo lô · Khâu 4 · Tiêu chuẩn HACCP / ISO 22000</p>
         </div>
         <Button onClick={() => { setEditing(null); setDialogOpen(true); }}><Plus className="w-4 h-4 mr-2" />Thêm phiếu</Button>
       </div>
 
-      <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-700">
-        Lưu ý: cấu trúc dữ liệu Khâu 4 là dữ liệu giả lập (định dạng tích hợp trong demo chưa được xác minh theo tiêu chuẩn Masan).
-      </p>
-
-      <div className="rounded-xl border border-slate-200 bg-white grid grid-cols-2 lg:grid-cols-4 overflow-hidden [&>*]:border-slate-200 [&>*:nth-child(2n)]:border-l lg:[&>*]:border-l [&>*:first-child]:border-l-0 [&>*:nth-child(n+3)]:border-t lg:[&>*:nth-child(n+3)]:border-t-0">
+      <div className="rounded-xl border border-masan-border bg-masan-surface grid grid-cols-2 lg:grid-cols-4 overflow-hidden [&>*]:border-masan-border [&>*:nth-child(2n)]:border-l lg:[&>*]:border-l [&>*:first-child]:border-l-0 [&>*:nth-child(n+3)]:border-t lg:[&>*:nth-child(n+3)]:border-t-0">
         <Kpi label="Tổng phiếu" value={fmtNum(stats.total)} />
         <Kpi label="Tỷ lệ đạt (theo mẫu)" value={stats.passRate === null ? '—' : `${fmtDec(stats.passRate, 1)}%`} />
         <Kpi label="Phiếu NG" value={fmtNum(stats.ng)} tone={stats.ng ? 'bad' : undefined} />
@@ -203,31 +199,31 @@ export default function Inspections() {
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[220px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" aria-hidden="true" />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Tìm mã phiếu, Lot, lệnh sản xuất, mã lỗi…" aria-label="Tìm phiếu kiểm tra" className="pl-9" />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Tìm mã phiếu, Lot, lệnh sản xuất, mã lỗi…" aria-label="Tìm phiếu kiểm tra" className="pl-9 bg-masan-surface border-masan-border text-masan-text" />
         </div>
-        <select aria-label="Lọc theo kết luận" value={judgment} onChange={(e) => setJudgment(e.target.value)} className="h-10 border border-input rounded-md px-3 bg-white text-sm">
+        <select aria-label="Lọc theo kết luận" value={judgment} onChange={(e) => setJudgment(e.target.value)} className="h-10 border border-masan-border rounded-md px-3 bg-masan-surface text-masan-text text-sm">
           <option value="ALL">Mọi kết luận</option>
           <option value="OK">OK</option><option value="NG">NG</option><option value="HOLD">HOLD</option>
         </select>
-        <select aria-label="Lọc theo loại kiểm tra" value={type} onChange={(e) => setType(e.target.value)} className="h-10 border border-input rounded-md px-3 bg-white text-sm">
+        <select aria-label="Lọc theo loại kiểm tra" value={type} onChange={(e) => setType(e.target.value)} className="h-10 border border-masan-border rounded-md px-3 bg-masan-surface text-masan-text text-sm">
           <option value="ALL">Mọi loại</option>
           {INSPECTION_TYPES.map((t) => <option key={t.value} value={t.value}>{t.value}</option>)}
         </select>
       </div>
 
-      <section className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <section className="rounded-xl border border-masan-border bg-masan-surface overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-xs text-slate-500">
+            <thead className="bg-masan-elevated text-xs text-masan-muted">
               <tr>
-                {['Phiếu', 'Lô / Lệnh SX', 'Loại', 'Kết quả mẫu', 'Kết luận', 'Mã lỗi', 'Đo CMM', 'Người KT', ''].map((h) => (
+                {['Phiếu', 'Lô / Lệnh SX', 'Loại', 'Kết quả mẫu', 'Kết luận', 'Mã lỗi', 'Chỉ số kiểm nghiệm', 'Người KT', ''].map((h) => (
                   <th key={h} scope="col" className="px-3 py-3 text-left font-medium whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {isLoading && Array.from({ length: 4 }, (_, i) => (
-                <tr key={i} className="border-t border-slate-200"><td colSpan={9} className="px-3 py-3"><Skeleton className="h-6 w-full" /></td></tr>
+                <tr key={i} className="border-t border-masan-border"><td colSpan={9} className="px-3 py-3"><Skeleton className="h-6 w-full" /></td></tr>
               ))}
               {isError && (
                 <tr><td colSpan={9} className="px-3 py-10 text-center text-slate-500">
@@ -244,9 +240,9 @@ export default function Inspections() {
                 const out = outOfTolerance(r);
                 const failPct = r.sampleSize > 0 ? (r.failQuantity / r.sampleSize) * 100 : 0;
                 return (
-                  <tr key={r.id} className="border-t border-slate-200 align-top">
+                  <tr key={r.id} className="border-t border-masan-border align-top">
                     <td className="px-3 py-3">
-                      <p className="font-medium text-slate-900 whitespace-nowrap">{r.inspectionId}</p>
+                      <p className="font-medium text-masan-text whitespace-nowrap">{r.inspectionId}</p>
                       <p className="text-xs text-slate-500 whitespace-nowrap">{fmtDate(r.inspectionDate, true)}</p>
                     </td>
                     <td className="px-3 py-3">

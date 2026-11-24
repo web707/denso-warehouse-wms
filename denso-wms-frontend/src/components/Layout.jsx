@@ -20,26 +20,23 @@ import {
 
 const navGroups = [
   {
-    label: 'Vận hành cốt lõi',
+    label: 'Trung tâm Vận hành',
     items: [
       { to: '/', label: 'Tổng quan điều hành', short: 'Tổng quan', icon: LayoutDashboard, end: true },
-      { to: '/inventory', label: 'Giao dịch kho', short: 'Nhập · Xuất', icon: ArrowRightLeft },
-      { to: '/cycle-counts', label: 'Kiểm kê định kỳ (SoD)', short: 'Kiểm kê', icon: ClipboardList },
+      { to: '/inventory', label: 'Giao dịch kho (Nhập/Xuất/Chuyển)', short: 'Giao dịch', icon: ArrowRightLeft },
       { to: '/dispatch-orders', label: 'Đơn xuất kho (FEFO)', short: 'Xuất kho', icon: Truck },
-      { to: '/documents', label: 'Chứng từ kho hàng', short: 'Chứng từ', icon: Layers },
-      { to: '/orders', label: 'Lô hàng & Mã SKU', short: 'Lô · SKU', icon: Package },
-      { to: '/catalog', label: 'Danh mục sản phẩm', short: 'Danh mục', icon: BookOpen },
-      { to: '/fefo', label: 'Hạn dùng & FEFO', short: 'FEFO', icon: CalendarClock },
-      { to: '/qr-labels', label: 'In mã QR & Barcode', short: 'QR Code', icon: QrCode },
+      { to: '/cycle-counts', label: 'Kiểm kê định kỳ (SoD)', short: 'Kiểm kê', icon: ClipboardList },
+      { to: '/documents', label: 'Chứng từ kho & OCR', short: 'Chứng từ', icon: Layers },
     ],
   },
   {
-    label: 'Không gian kho 3D',
+    label: 'Không gian & Hàng hóa',
     items: [
-      { to: '/racks', label: 'Trung tâm điều hành 3D', short: 'Điều hành 3D', icon: Warehouse },
-      { to: '/supply-chain-3d', label: 'Hành trình 3D (Mô phỏng)', short: 'Mô phỏng', icon: GitBranch },
+      { to: '/racks', label: 'Điều hành kho 3D Digital Twin', short: 'Kho 3D', icon: Warehouse },
+      { to: '/orders', label: 'Lô hàng & Quản lý SKU', short: 'Lô & SKU', icon: Package },
+      { to: '/catalog', label: 'Danh mục sản phẩm Masan', short: 'Danh mục', icon: BookOpen },
       { to: '/zones', label: 'Quản lý khu vực (Zone)', short: 'Zone', icon: MapPinned },
-      { to: '/packing-rules', label: 'Quy ước đóng gói & kệ', short: 'Quy ước', icon: ClipboardList },
+      { to: '/qr-labels', label: 'In mã QR & Barcode', short: 'QR Code', icon: QrCode },
     ],
   },
   {
@@ -52,9 +49,9 @@ const navGroups = [
     ],
   },
   {
-    label: 'Báo cáo & Quản trị',
+    label: 'Báo cáo & Hệ thống',
     items: [
-      { to: '/reports', label: 'Báo cáo thông kê WMS', short: 'Báo cáo', icon: BarChart3 },
+      { to: '/reports', label: 'Báo cáo thống kê WMS', short: 'Báo cáo', icon: BarChart3 },
       { to: '/history', label: 'Nhật ký kiểm toán', short: 'Nhật ký', icon: HistoryIcon },
       { to: '/users', label: 'Phân quyền & Tài khoản', short: 'Tài khoản', icon: UsersRound, adminOnly: true },
     ],
@@ -66,9 +63,9 @@ const allItems = navGroups.flatMap((g) => g.items);
 
 const THEME_CYCLE = { light: 'dark', dark: 'system', system: 'light' };
 const THEME_META = {
-  light: { icon: Sun, label: 'Giao diện sáng' },
-  dark: { icon: Moon, label: 'Giao diện tối' },
-  system: { icon: Monitor, label: 'Theo hệ thống' },
+  light: { icon: Sun, label: 'Giao diện' },
+  dark: { icon: Moon, label: 'Giao diện' },
+  system: { icon: Monitor, label: 'Giao diện' },
 };
 
 function WithTip({ enabled, label, children }) {
@@ -87,7 +84,18 @@ function SidebarBody({ collapsed = false, onNavigate, onToggleCollapse }) {
   const { resetData } = useStore();
   const { logout, user } = useAuth();
   const { theme, setTheme } = useTheme();
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const ThemeIcon = THEME_META[theme].icon;
+
+  const handleRefresh = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await resetData();
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 600);
+    }
+  };
 
   const footBtn =
     'flex items-center gap-2.5 h-8 px-2.5 rounded-lg text-xs font-medium text-[#94A3B8] hover:bg-[#17263B] hover:text-[#F8FAFC] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500';
@@ -156,16 +164,16 @@ function SidebarBody({ collapsed = false, onNavigate, onToggleCollapse }) {
         {!collapsed && user && (
           <div className="rounded-xl bg-[#111E30] border border-[#26374C] p-2.5 mb-2 shadow-sm flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-emerald-950 border border-emerald-500/40 flex items-center justify-center text-xs font-bold text-emerald-400 shrink-0">
-              {(user.fullName || user.email || 'U').slice(0, 2).toUpperCase()}
+              NA
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold truncate text-[#F8FAFC] leading-none mb-1">
-                {user.fullName || user.email}
+                {user.fullName || 'Nguyễn Văn An'}
               </p>
               <div className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                 <span className="text-[10px] text-emerald-400/90 font-medium truncate">
-                  {ROLE_LABELS[user.role] || 'Nhân sự kho'}
+                  Quản trị hệ thống · Masan
                 </span>
               </div>
             </div>
@@ -173,40 +181,29 @@ function SidebarBody({ collapsed = false, onNavigate, onToggleCollapse }) {
         )}
 
         <div className="grid grid-cols-2 gap-1">
-          <WithTip enabled={collapsed} label={THEME_META[theme].label}>
+          <WithTip enabled={collapsed} label="Chuyển đổi giao diện Sáng / Tối">
             <button
               type="button"
               onClick={() => setTheme(THEME_CYCLE[theme])}
-              aria-label={`${THEME_META[theme].label}. Bấm để đổi`}
+              aria-label="Đổi giao diện Sáng / Tối"
               className={cn(footBtn, collapsed ? 'w-full justify-center' : 'w-full')}
             >
               <ThemeIcon className="w-3.5 h-3.5 shrink-0" />
-              {!collapsed && <span className="truncate">{THEME_META[theme].label}</span>}
+              {!collapsed && <span className="truncate">Giao diện</span>}
             </button>
           </WithTip>
 
-          <AlertDialog>
-            <WithTip enabled={collapsed} label="Làm mới dữ liệu">
-              <AlertDialogTrigger asChild>
-                <button type="button" aria-label="Làm mới dữ liệu" className={cn(footBtn, collapsed ? 'w-full justify-center' : 'w-full')}>
-                  <RotateCcw className="w-3.5 h-3.5 shrink-0" />
-                  {!collapsed && <span className="truncate">Làm mới</span>}
-                </button>
-              </AlertDialogTrigger>
-            </WithTip>
-            <AlertDialogContent className="bg-[#111E30] border-[#26374C] text-[#F8FAFC]">
-              <AlertDialogHeader>
-                <AlertDialogTitle className="text-white text-base">Tải lại dữ liệu hệ thống?</AlertDialogTitle>
-                <AlertDialogDescription className="text-[#94A3B8] text-sm">
-                  Hệ thống sẽ đồng bộ lại toàn bộ danh mục sản phẩm và trạng thái ô kệ mới nhất từ máy chủ PostgreSQL.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel className="bg-[#17263B] border-[#26374C] text-[#F8FAFC] hover:bg-[#26374C]">Hủy</AlertDialogCancel>
-                <AlertDialogAction onClick={resetData} className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium">Đồng ý</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          <WithTip enabled={collapsed} label="Làm mới dữ liệu tức thì">
+            <button
+              type="button"
+              onClick={handleRefresh}
+              aria-label="Làm mới dữ liệu"
+              className={cn(footBtn, collapsed ? 'w-full justify-center' : 'w-full')}
+            >
+              <RotateCcw className={cn("w-3.5 h-3.5 shrink-0 transition-transform", isRefreshing && "animate-spin text-emerald-400")} />
+              {!collapsed && <span className="truncate">{isRefreshing ? 'Đang tải...' : 'Làm mới'}</span>}
+            </button>
+          </WithTip>
         </div>
 
         <button 
@@ -358,9 +355,14 @@ export default function Layout() {
               )}
 
               <div className="flex items-center gap-2 pl-2 border-l border-[#26374C]">
-                <span className="text-xs text-[#94A3B8]">Vai trò:</span>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-[#17263B] text-emerald-300 border border-[#26374C]">
-                  {ROLE_LABELS[user?.role] || 'Nhân sự'}
+                <span className="text-xs text-[#94A3B8]">Kho:</span>
+                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#111E30] text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  Kho Tổng Bắc Ninh (FMCG Hub)
+                </span>
+                <span className="text-xs text-[#94A3B8] ml-2">Nhân sự:</span>
+                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-[#17263B] text-slate-200 border border-[#26374C]">
+                  {user?.fullName || 'Nguyễn Văn An'} ({ROLE_LABELS[user?.role] || 'Quản trị hệ thống'})
                 </span>
               </div>
             </div>

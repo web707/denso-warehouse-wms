@@ -12,7 +12,7 @@ export default function PackingRuleEditor() {
       {packingRules.map((rule) => (
         <div
           key={rule.id}
-          className="flex items-center gap-2 p-2.5 rounded-lg border border-slate-200 bg-white hover:border-slate-300 transition group"
+          className="flex items-center gap-2 p-2.5 rounded-lg border border-masan-border bg-masan-surface hover:border-masan-primary/40 transition group"
         >
           <Switch
             checked={rule.active !== false}
@@ -21,19 +21,19 @@ export default function PackingRuleEditor() {
           <Input
             value={rule.text}
             onChange={(e) => updateRule(rule.id, { text: e.target.value })}
-            className="flex-1 h-8 text-sm"
+            className="flex-1 h-8 text-sm bg-masan-elevated border-masan-border text-masan-text placeholder:text-masan-muted"
             placeholder="Nội dung quy ước..."
           />
           <Input
             value={rule.category}
             onChange={(e) => updateRule(rule.id, { category: e.target.value })}
-            className="w-[130px] h-8 text-xs"
+            className="w-[130px] h-8 text-xs bg-masan-elevated border-masan-border text-masan-text placeholder:text-masan-muted"
             placeholder="Danh mục"
           />
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100"
+            className="h-8 w-8 text-masan-muted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
             onClick={() => deleteRule(rule.id)}
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -43,8 +43,8 @@ export default function PackingRuleEditor() {
 
       <Button
         variant="outline"
-        className="w-full border-dashed"
-        onClick={() => addRule({ text: 'Quy ước đóng hàng mới', category: 'Khác', icon: 'Box', active: true })}
+        className="w-full border-dashed border-masan-border text-masan-text hover:bg-masan-elevated"
+        onClick={() => addRule({ text: 'Quy ước lưu kho FMCG mới', category: 'Tiêu chuẩn', icon: 'Box', active: true })}
       >
         <Plus className="w-4 h-4 mr-1.5" /> Thêm quy ước
       </Button>

@@ -18,14 +18,14 @@ const norm = (v) => String(v || '').trim().toLowerCase();
 
 function Section({ step, title, count, to, linkLabel, children }) {
   return (
-    <section className="rounded-xl border border-slate-200 bg-white">
-      <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-slate-200">
+    <section className="rounded-xl border border-masan-border bg-masan-surface">
+      <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-masan-border">
         <div className="flex items-center gap-3 min-w-0">
-          <span className="shrink-0 w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold flex items-center justify-center">{step}</span>
-          <h2 className="text-base font-semibold text-slate-900 truncate">{title}</h2>
+          <span className="shrink-0 w-7 h-7 rounded-full bg-indigo-500/10 text-indigo-400 text-xs font-semibold flex items-center justify-center">{step}</span>
+          <h2 className="text-base font-semibold text-masan-text truncate">{title}</h2>
           <Pill tone={count ? 'indigo' : 'slate'}>{count}</Pill>
         </div>
-        {to && <Link to={to} className="text-sm font-medium text-indigo-600 hover:underline whitespace-nowrap">{linkLabel}</Link>}
+        {to && <Link to={to} className="text-sm font-medium text-indigo-400 hover:underline whitespace-nowrap">{linkLabel}</Link>}
       </div>
       <div className="p-5">{children}</div>
     </section>
@@ -74,7 +74,7 @@ export default function Traceability() {
     const j = data.latest.judgment;
     const out = [];
     const inStock = data.parts.length;
-    if (inStock) out.push(`Lô đang ở trạng thái ${j} nhưng còn ${fmtNum(inStock)} PART trong kho. Cần cách ly, không xuất đi.`);
+    if (inStock) out.push(`Lô đang ở trạng thái ${j} nhưng còn ${fmtNum(inStock)} SKU trong kho. Cần cách ly kiểm định, không xuất đi.`);
     const after = data.shipments.filter((s) => s.actualShipDate && new Date(s.actualShipDate) > new Date(data.latest.inspectionDate));
     if (after.length) out.push(`${fmtNum(after.length)} lô giao đã xuất đi SAU khi lô bị ${j}: ${after.map((s) => s.shipmentNumber).join(', ')}.`);
     return out;
@@ -89,24 +89,28 @@ export default function Traceability() {
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-5xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Truy vết theo lô</h1>
-        <p className="text-sm text-slate-500 mt-1">Tìm số lô và chọn SKU để xem nguồn gốc, tồn kho, kiểm định và giao hàng.</p>
+        <h1 className="text-2xl font-semibold text-masan-text">Truy vết theo lô</h1>
+        <p className="text-sm text-slate-400 mt-1">Tìm số lô và chọn SKU để xem nguồn gốc, tồn kho, kiểm định và giao hàng.</p>
       </div>
 
       <form onSubmit={submit} className="flex gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" aria-hidden="true" />
-          <Input list="known-lots" value={input} onChange={(e) => setInput(e.target.value)} placeholder="LOT-2026-001" aria-label="Lot Number" className="pl-9" />
-          <datalist id="known-lots">{[...new Set(matches.map((l) => l.lotNumber))].map((name) => <option key={name} value={name} />)}</datalist>
+          <Input list="known-lots" value={input} onChange={(e) => setInput(e.target.value)} placeholder="LOT-2026-001" aria-label="Lot Number" className="pl-9 bg-masan-surface border-masan-border text-masan-text" />
+          <datalist id="known-lots">
+            {[...new Set([...matches.map((l) => l.lotNumber), 'LOT-CS-202611-01', 'LOT-NN-202611-01', 'LOT-OMA-202611-02', 'MS-FEFO-001-L01', 'LOT-MEAT-202611-01', 'LOT-NET-202611-01'])].filter(Boolean).map((name) => (
+              <option key={name} value={name} />
+            ))}
+          </datalist>
         </div>
         <Button type="submit">Truy vết</Button>
       </form>
 
       {!data && (
-        <section className="rounded-xl border border-slate-200 bg-white p-5">
-          <h2 className="text-base font-semibold text-slate-900">Các lô đã biết</h2>
+        <section className="rounded-xl border border-masan-border bg-masan-surface p-5">
+          <h2 className="text-base font-semibold text-masan-text">Các lô đã biết</h2>
           {matches.length === 0 ? (
-            <p className="mt-2 text-sm text-slate-500">Chưa có lô nào. Hãy gán Lot Number cho PART, lệnh sản xuất, phiếu kiểm tra hoặc lô giao.</p>
+            <p className="mt-2 text-sm text-slate-400">Chưa có lô nào. Hãy gán Lot Number cho SKU, lệnh sản xuất, phiếu kiểm tra hoặc lô giao.</p>
           ) : (
             <div className="mt-3 flex flex-wrap gap-2">
               {matches.slice(0, 40).map((l) => (
@@ -114,7 +118,7 @@ export default function Traceability() {
                   key={l.lotId}
                   type="button"
                   onClick={() => { setInput(l.lotNumber); setParams({ lot: l.lotNumber, sku: l.productCode }); }}
-                  className="inline-flex items-center gap-2 h-8 rounded-md border border-slate-200 px-3 text-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="inline-flex items-center gap-2 h-8 rounded-md border border-masan-border bg-masan-surface px-3 text-sm hover:bg-masan-elevated text-masan-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {l.lotNumber} · {l.productCode}
                   {l.judgment && <Pill tone={JUDGMENT[l.judgment]?.tone || 'amber'}>{JUDGMENT[l.judgment]?.label || 'Cần kiểm định'}</Pill>}
@@ -127,10 +131,10 @@ export default function Traceability() {
 
       {data && (
         <>
-          <div className="rounded-xl border border-slate-200 bg-white p-5 flex flex-wrap items-center gap-x-6 gap-y-2">
+          <div className="rounded-xl border border-masan-border bg-masan-surface p-5 flex flex-wrap items-center gap-x-6 gap-y-2">
             <div>
               <p className="text-xs text-slate-500">Lot Number</p>
-              <p className="text-xl font-semibold text-slate-900">{identity.lotNumber} · {identity.productCode}</p>
+              <p className="text-xl font-semibold text-masan-text">{identity.lotNumber} · {identity.productCode}</p>
             </div>
             <div>
               <p className="text-xs text-slate-500">Kết luận chất lượng mới nhất</p>
@@ -163,16 +167,16 @@ export default function Traceability() {
           </Section>
 
           <Section step="2" title="Tồn kho" count={data.parts.length} to="/racks" linkLabel="Mở Sơ đồ kho">
-            {data.parts.length === 0 ? <Empty text="Không có PART nào trong kho thuộc lô này." /> : (
+            {data.parts.length === 0 ? <Empty text="Không có mặt hàng nào trong kho thuộc lô này." /> : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="text-xs text-slate-500"><tr>
-                    {['PART', 'Item Number', 'Vị trí', 'Số lượng', 'Hạn dùng', 'QC', 'Nhà cung cấp'].map((h) => <th key={h} className="py-2 pr-3 text-left font-medium whitespace-nowrap">{h}</th>)}
+                    {['Tên sản phẩm', 'Mã SKU', 'Vị trí', 'Số lượng', 'Hạn dùng', 'QC', 'Nhà cung cấp'].map((h) => <th key={h} className="py-2 pr-3 text-left font-medium whitespace-nowrap">{h}</th>)}
                   </tr></thead>
                   <tbody>
                     {data.parts.map((p) => (
-                      <tr key={p.id} className="border-t border-slate-200">
-                        <td className="py-2 pr-3 text-slate-900">{p.partName}</td>
+                      <tr key={p.id} className="border-t border-masan-border">
+                        <td className="py-2 pr-3 text-masan-text">{p.partName}</td>
                         <td className="py-2 pr-3 text-slate-600">{p.productCode}</td>
                         <td className="py-2 pr-3 whitespace-nowrap">{p.rackId ? subinventoryCode(rackById.get(p.rackId), p.preferredRackSlot) : <span className="text-slate-400">Chưa xếp kệ</span>}</td>
                         <td className="py-2 pr-3 tabular-nums whitespace-nowrap">{fmtNum(p.quantity)} {p.uomCode}</td>
@@ -194,7 +198,7 @@ export default function Traceability() {
             {ledger.length > 0 && <ul className="divide-y divide-slate-200">
               {ledger.map((row) => <li key={row.id} className="py-2 text-sm">
                 <p>{fmtDate(row.createdAt, true)} · {row.type} · {fmtNum(row.quantityPcs)} đơn vị</p>
-                <p className="break-all text-xs text-slate-500">PART {row.partId}{row.destinationPartId ? ` → ${row.destinationPartId}` : ''}</p>
+                <p className="break-all text-xs text-slate-500">Mã #{row.partId}{row.destinationPartId ? ` → ${row.destinationPartId}` : ''}</p>
               </li>)}
             </ul>}
           </Section>

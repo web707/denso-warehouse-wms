@@ -490,7 +490,7 @@ export default function WarehouseControlCenter() {
                 </span>
               </div>
               <p className="text-xs text-[#94a3b8]">
-                MASAN Main Hub ({WAREHOUSE_CODE}) · Giám sát & Điều phối vận hành số hóa
+                Kho Tổng Masan Bắc Ninh (MASAN-HN-01) · Giám sát & Điều phối vận hành số hóa
               </p>
             </div>
           </div>
@@ -811,11 +811,21 @@ export default function WarehouseControlCenter() {
                 )}
               </div>
 
-              {/* Bottom Workload Metrics (Học tập UX/UI từ Ảnh 1) */}
+              {/* Bottom Workload Metrics */}
               <div className="rounded-lg border border-[#1e2f47] bg-[#0e192a] p-3 space-y-2 shrink-0">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-semibold text-[#94a3b8]">Thời gian hoàn thành (Ước tính):</span>
-                  <span className="font-mono font-bold text-emerald-400">~3h 45m</span>
+                  {(() => {
+                    const pendingCount = filteredTasks.filter(t => t.status !== 'complete').length;
+                    const estMin = Math.max(20, pendingCount * 15);
+                    const hours = Math.floor(estMin / 60);
+                    const mins = estMin % 60;
+                    return (
+                      <span className="font-mono font-bold text-emerald-400">
+                        {hours > 0 ? `~${hours}h ${mins}m` : `~${mins}m`}
+                      </span>
+                    );
+                  })()}
                 </div>
                 <div>
                   <span className="text-[10px] text-[#64748b] block mb-1">Khối lượng tác vụ theo khung giờ (Mô phỏng ước tính):</span>
@@ -835,30 +845,41 @@ export default function WarehouseControlCenter() {
             </div>
           )}
 
-          {/* TAB 2: RACKS & CAPACITY (Học tập UX/UI từ Ảnh 3) */}
+          {/* TAB 2: RACKS & CAPACITY */}
           {activeTab === 'racks' && (
             <div className="flex-1 overflow-y-auto p-3 space-y-3">
               {/* Warehouse Capacity Overview Card */}
-              <div className="rounded-lg border border-[#1e2f47] bg-[#0e192a] p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-white">Dung lượng Phân khu A</span>
-                  <span className="text-xs font-mono font-bold text-emerald-400">48.0%</span>
-                </div>
-                <div className="space-y-1 text-xs text-[#94a3b8]">
-                  <div className="flex justify-between">
-                    <span>Sức chứa tối đa:</span>
-                    <span className="text-white font-medium">30,000 kg / 150 m³</span>
+              {(() => {
+                const maxWeightKg = Math.max(30000, warehouseRacks.length * 2500);
+                const maxCbm = Math.max(150, warehouseRacks.length * 12.5);
+                const usedWeightKg = rackSummaries.reduce((sum, r) => sum + (r.totalWeight || 0), 0) || 14400;
+                const usedCbm = rackSummaries.reduce((sum, r) => sum + (r.totalCbm || 0), 0) || 72;
+                const pct = Math.min(100, Math.round((usedWeightKg / maxWeightKg) * 100));
+                const freeWeightKg = Math.max(0, maxWeightKg - usedWeightKg);
+                const freeCbm = Math.max(0, maxCbm - usedCbm);
+                return (
+                  <div className="rounded-lg border border-[#1e2f47] bg-[#0e192a] p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-white">Dung lượng {selectedZone} ({warehouseRacks.length} dãy kệ)</span>
+                      <span className="text-xs font-mono font-bold text-emerald-400">{pct}%</span>
+                    </div>
+                    <div className="space-y-1 text-xs text-[#94a3b8]">
+                      <div className="flex justify-between">
+                        <span>Sức chứa tối đa:</span>
+                        <span className="text-white font-medium">{fmtNum(maxWeightKg)} kg / {fmtDec(maxCbm, 1)} m³</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Đã sử dụng:</span>
+                        <span className="text-white font-medium">{fmtNum(usedWeightKg)} kg / {fmtDec(usedCbm, 1)} m³</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Còn khả dụng:</span>
+                        <span className="text-emerald-400 font-medium">{fmtNum(freeWeightKg)} kg / {fmtDec(freeCbm, 1)} m³</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span>Đã sử dụng:</span>
-                    <span className="text-white font-medium">14,400 kg / 72.0 m³</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Còn khả dụng:</span>
-                    <span className="text-emerald-400 font-medium">15,600 kg / 78.0 m³</span>
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Aisle-wise Capacity Bars for R01, R02, R03 */}
               <div className="space-y-2">
@@ -898,7 +919,7 @@ export default function WarehouseControlCenter() {
                       </div>
 
                       <div className="flex justify-between text-[11px] text-[#94a3b8]">
-                        <span>{rack.partCount} mã PART</span>
+                        <span>{rack.partCount} mã SKU</span>
                         <span>{fmtNum(rack.totalWeight)} kg · {fmtDec(rack.totalCbm, 1)} m³</span>
                       </div>
                     </div>
@@ -1016,7 +1037,7 @@ export default function WarehouseControlCenter() {
                       ĐANG CHỨA HÀNG
                     </Badge>
                     <span className="text-[11px] font-mono text-[#94a3b8]">
-                      PART {selectedSlotPart.id.slice(0, 8)}
+                      Lô #{selectedSlotPart.lotNumber || selectedSlotPart.id.slice(0, 8)}
                     </span>
                   </div>
 

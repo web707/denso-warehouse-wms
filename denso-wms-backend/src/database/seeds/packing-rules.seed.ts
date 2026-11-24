@@ -6,56 +6,56 @@ import { PackingRule } from '../../packing-rules/entities/packing-rule.entity';
 // sheet mandates that the frontend never modelled. All are is_system = true:
 // deletable is blocked, but toggling `active` or rewording `text` is fine.
 export const PACKING_RULE_SEED = [
-  { text: 'Hướng chất hàng: Front → Door', category: 'Hướng chất', icon: 'ArrowRight' },
-  { text: 'Được phép xoay carton 90°', category: 'Xoay carton', icon: 'RotateCw' },
-  { text: 'Không trộn PART trong cùng 1 Block', category: 'Phân PART', icon: 'Ban' },
-  { text: 'Mỗi PART là một Block riêng', category: 'Phân Block', icon: 'Box' },
-  { text: 'Mỗi Block có 01 màu riêng biệt', category: 'Màu sắc', icon: 'Palette' },
+  { text: 'Hướng chất hàng: Trong ra ngoài (Front → Door)', category: 'Hướng chất', icon: 'ArrowRight' },
+  { text: 'Được phép xoay carton 90° tối ưu diện tích', category: 'Xoay carton', icon: 'RotateCw' },
+  { text: 'Không trộn các SKU khác nhau trong cùng 1 Block / Ô chứa', category: 'Phân SKU', icon: 'Ban' },
+  { text: 'Mỗi SKU / Lô hàng tạo thành một Block lưu trữ riêng biệt', category: 'Phân Block', icon: 'Box' },
+  { text: 'Mỗi Block có 01 màu sắc nhận diện riêng biệt', category: 'Màu sắc', icon: 'Palette' },
   { text: 'Chất hàng từ trong ra ngoài (Front trước)', category: 'Thứ tự chất', icon: 'Layers' },
-  { text: 'Phân bổ trọng lượng đều trên sàn kệ', category: 'Phân bổ', icon: 'Weight' },
+  { text: 'Phân bổ trọng lượng đều trên sàn kệ (tải đều)', category: 'Phân bổ', icon: 'Weight' },
   {
-    text: 'Không xếp quá cao — dưới mức cửa kệ',
+    text: 'Không xếp quá cao — dưới mức giới hạn trần khoang kệ',
     category: 'Chiều cao',
     icon: 'PackageCheck',
   },
-  { text: 'Sử dụng lót/giằng hàng khi cần thiết', category: 'Giằng hàng', icon: 'ShieldCheck' },
-  { text: 'Kiểm tra kích thước thùng trước khi đóng', category: 'Kiểm tra', icon: 'Ruler' },
-  { text: 'Ghi chú PART/Block trên sơ đồ đóng hàng', category: 'Ghi chú', icon: 'ClipboardList' },
+  { text: 'Sử dụng tấm lót / bọc màng co pallet bảo vệ hàng', category: 'Giằng hàng', icon: 'ShieldCheck' },
+  { text: 'Kiểm tra quy cách thùng và nhãn tem trước khi nhập', category: 'Kiểm tra', icon: 'Ruler' },
+  { text: 'Ghi chú SKU / Lô hàng trên sơ đồ lưu kho WMS', category: 'Ghi chú', icon: 'ClipboardList' },
   {
-    text: 'Tổng CBM không vượt quá giới hạn kệ',
+    text: 'Tổng thể tích CBM không vượt quá thể tích khoang kệ',
     category: 'Giới hạn',
     icon: 'AlertTriangle',
   },
   {
-    text: 'Tổng trọng lượng không vượt quá giới hạn kệ',
+    text: 'Tổng trọng lượng không vượt quá tải trọng khoang kệ',
     category: 'Giới hạn',
     icon: 'AlertTriangle',
   },
-  // From "Quy ước đóng hàng" — not present in the old frontend seed:
+  // Masan Consumer FMCG Specific Storage Rules:
   {
-    text: 'Xếp theo thứ tự: Division (HomeGoods → Marshalls → TJ Maxx) → DC Prefix → Master PO tăng dần',
-    category: 'Thứ tự xếp',
-    icon: 'ListOrdered',
+    text: 'Tuân thủ nghiêm ngặt nguyên tắc FEFO: Lô có hạn dùng gần xếp ngoài / tầng lấy hàng',
+    category: 'Nguyên tắc FEFO',
+    icon: 'Clock',
   },
   {
-    text: 'Block loading: không xen kẽ nhiều DC Prefix / PO khác nhau trong cùng khu vực',
-    category: 'Phân Block',
-    icon: 'LayoutGrid',
+    text: 'Cách ly tuyệt đối ngành hàng hóa mỹ phẩm (Bột giặt NET, Sopa) khỏi thực phẩm & đồ uống',
+    category: 'Cách ly an toàn',
+    icon: 'ShieldAlert',
   },
   {
-    text: 'Một carton wall chỉ được chứa tối đa 2 DC Prefix, khi prefix sau là phần tiếp nối của prefix trước',
-    category: 'Carton wall',
-    icon: 'Columns',
+    text: 'Thịt mát MEATDeli và sản phẩm chuỗi lạnh phải bảo quản trong Kho Mát 0 - 4°C',
+    category: 'Chuỗi nhiệt độ',
+    icon: 'ThermometerSnowflake',
   },
   {
-    text: 'Chỉ được xếp chồng carton lên cùng PART, không chồng lên PART khác',
+    text: 'Tải trọng tối đa mỗi khoang kệ không vượt quá 250 kg hoặc 8 tầng thùng hàng',
+    category: 'Tải trọng',
+    icon: 'Weight',
+  },
+  {
+    text: 'Chỉ xếp chồng thùng cùng SKU hoặc cùng quy cách (không đè hàng nặng lên hàng dễ vỡ/móp)',
     category: 'Xếp chồng',
     icon: 'Layers3',
-  },
-  {
-    text: 'Chỉ khi PART đã chạm trần kệ mà vẫn còn hàng mới được phép mở wall mới',
-    category: 'Xếp chồng',
-    icon: 'ArrowUpToLine',
   },
 ];
 

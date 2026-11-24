@@ -24,7 +24,7 @@ const FIELDS = [
   { key: 'workOrderNumber', label: 'Số lệnh (WorkOrderNumber)', required: true, placeholder: 'WO-2026-0001' },
   { key: 'workOrderType', label: 'Loại lệnh (WorkOrderType)', type: 'select', options: WO_TYPES },
   { key: 'workOrderStatus', label: 'Trạng thái (WorkOrderStatus)', type: 'select', options: STATUS_OPTIONS },
-  { key: 'itemNumber', label: 'Item Number', required: true, placeholder: 'A009', help: 'Mã sản phẩm được sản xuất' },
+  { key: 'itemNumber', label: 'Item Number', required: true, placeholder: 'MSN-CHINSU-01', help: 'Mã sản phẩm được sản xuất' },
   { key: 'lotNumber', label: 'Lot Number', placeholder: 'LOT-2026-001', help: 'Liên kết với kho và kiểm tra chất lượng' },
   { key: 'organizationCode', label: 'Nhà máy (OrganizationCode)' },
   { type: 'section', label: 'Số lượng' },
@@ -106,8 +106,8 @@ function Kpi({ label, value, sub, tone }) {
   return (
     <div className="p-5">
       <p className="text-sm text-slate-500">{label}</p>
-      <p className={cn('mt-1 text-3xl font-semibold tabular-nums text-slate-900', tone === 'warn' && 'text-amber-600', tone === 'bad' && 'text-red-600')}>{value}</p>
-      {sub && <p className="mt-1 text-xs text-slate-500">{sub}</p>}
+      <p className={cn('mt-1 text-3xl font-semibold tabular-nums text-masan-text', tone === 'warn' && 'text-amber-500', tone === 'bad' && 'text-red-500')}>{value}</p>
+      {sub && <p className="mt-1 text-xs text-slate-400">{sub}</p>}
     </div>
   );
 }
@@ -165,13 +165,13 @@ export default function WorkOrders() {
     <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Kế hoạch sản xuất</h1>
-          <p className="text-sm text-slate-500 mt-1">Lệnh sản xuất (Work Order) · Khâu 1 · Oracle Fusion Manufacturing</p>
+          <h1 className="text-2xl font-semibold text-masan-text">Kế hoạch sản xuất</h1>
+          <p className="text-sm text-slate-400 mt-1">Lệnh sản xuất & Kế hoạch đóng gói (Work Order) · Khâu 1 · Hệ thống WMS Masan Consumer</p>
         </div>
         <Button onClick={openNew}><Plus className="w-4 h-4 mr-2" />Thêm lệnh</Button>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white grid grid-cols-2 lg:grid-cols-4 overflow-hidden [&>*]:border-slate-200 [&>*:nth-child(2n)]:border-l lg:[&>*]:border-l [&>*:first-child]:border-l-0 [&>*:nth-child(n+3)]:border-t lg:[&>*:nth-child(n+3)]:border-t-0">
+      <div className="rounded-xl border border-masan-border bg-masan-surface grid grid-cols-2 lg:grid-cols-4 overflow-hidden [&>*]:border-masan-border [&>*:nth-child(2n)]:border-l lg:[&>*]:border-l [&>*:first-child]:border-l-0 [&>*:nth-child(n+3)]:border-t lg:[&>*:nth-child(n+3)]:border-t-0">
         <Kpi label="Tổng lệnh" value={fmtNum(stats.total)} />
         <Kpi label="Đang sản xuất" value={fmtNum(stats.running)} />
         <Kpi label="Trễ hạn" value={fmtNum(stats.overdue)} tone={stats.overdue ? 'bad' : undefined} sub={stats.overdue ? 'Quá hạn giao, chưa hoàn thành' : 'Không có lệnh trễ'} />
@@ -181,18 +181,18 @@ export default function WorkOrders() {
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[220px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" aria-hidden="true" />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Tìm số lệnh, Item, Lot, khách hàng…" aria-label="Tìm lệnh sản xuất" className="pl-9" />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Tìm số lệnh, Item, Lot, khách hàng…" aria-label="Tìm lệnh sản xuất" className="pl-9 bg-masan-surface border-masan-border text-masan-text" />
         </div>
-        <select aria-label="Lọc theo trạng thái" value={status} onChange={(e) => setStatus(e.target.value)} className="h-10 border border-input rounded-md px-3 bg-white text-sm">
+        <select aria-label="Lọc theo trạng thái" value={status} onChange={(e) => setStatus(e.target.value)} className="h-10 border border-masan-border rounded-md px-3 bg-masan-surface text-masan-text text-sm">
           <option value="ALL">Tất cả trạng thái</option>
           {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       </div>
 
-      <section className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <section className="rounded-xl border border-masan-border bg-masan-surface overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-xs text-slate-500">
+            <thead className="bg-masan-elevated text-xs text-masan-muted">
               <tr>
                 {['Lệnh sản xuất', 'Item / Lot', 'Tiến độ', 'Trạng thái', 'Xưởng', 'Khách hàng', 'Hạn giao', ''].map((h) => (
                   <th key={h} scope="col" className="px-3 py-3 text-left font-medium whitespace-nowrap">{h}</th>
@@ -201,15 +201,15 @@ export default function WorkOrders() {
             </thead>
             <tbody>
               {isLoading && Array.from({ length: 4 }, (_, i) => (
-                <tr key={i} className="border-t border-slate-200"><td colSpan={8} className="px-3 py-3"><Skeleton className="h-6 w-full" /></td></tr>
+                <tr key={i} className="border-t border-masan-border"><td colSpan={8} className="px-3 py-3"><Skeleton className="h-6 w-full" /></td></tr>
               ))}
               {isError && (
                 <tr><td colSpan={8} className="px-3 py-10 text-center text-slate-500">
-                  Không tải được dữ liệu. <button type="button" className="text-indigo-600 underline" onClick={() => refetch()}>Thử lại</button>
+                  Không tải được dữ liệu. <button type="button" className="text-indigo-500 underline" onClick={() => refetch()}>Thử lại</button>
                 </td></tr>
               )}
               {!isLoading && !isError && filtered.length === 0 && (
-                <tr><td colSpan={8} className="px-3 py-12 text-center text-slate-500">
+                <tr><td colSpan={8} className="px-3 py-12 text-center text-slate-400">
                   {rows.length === 0 ? 'Chưa có lệnh sản xuất nào. Bấm "Thêm lệnh" để tạo lệnh đầu tiên.' : 'Không có lệnh nào khớp bộ lọc.'}
                 </td></tr>
               )}
@@ -218,9 +218,9 @@ export default function WorkOrders() {
                 const meta = WO_STATUS[wo.workOrderStatus] || WO_STATUS.UNRELEASED;
                 const overdue = isWorkOrderOverdue(wo);
                 return (
-                  <tr key={wo.id} className="border-t border-slate-200 align-top">
+                  <tr key={wo.id} className="border-t border-masan-border align-top">
                     <td className="px-3 py-3">
-                      <p className="font-medium text-slate-900">{wo.workOrderNumber}</p>
+                      <p className="font-medium text-masan-text">{wo.workOrderNumber}</p>
                       <div className="mt-1 flex flex-wrap gap-1">
                         <Pill>{wo.workOrderType}</Pill>
                         {wo.expeditedFlag && <Pill tone="amber"><Zap className="w-3 h-3" />Gấp</Pill>}
@@ -228,9 +228,9 @@ export default function WorkOrders() {
                       </div>
                     </td>
                     <td className="px-3 py-3">
-                      <p className="text-slate-800">{wo.itemNumber}</p>
+                      <p className="text-masan-text font-medium">{wo.itemNumber}</p>
                       {wo.lotNumber
-                        ? <Link to={`/trace?lot=${encodeURIComponent(wo.lotNumber)}`} className="text-xs text-indigo-600 hover:underline">{wo.lotNumber}</Link>
+                        ? <Link to={`/trace?lot=${encodeURIComponent(wo.lotNumber)}`} className="text-xs text-indigo-400 hover:underline">{wo.lotNumber}</Link>
                         : <span className="text-xs text-slate-400">Chưa có lô</span>}
                     </td>
                     <td className="px-3 py-3 min-w-[170px]">

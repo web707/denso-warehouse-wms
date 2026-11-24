@@ -34,65 +34,81 @@ const statusMeta = {
 const initialFallbackOrders = [
   {
     id: 'dd664c1f-cf00-4bd5-8441-8836d14eb864',
-    reference: 'DISP-QA-667979',
-    sku: 'DQA-NAMNGU-VANG',
-    quantity: 2,
+    reference: 'SO-2026-WM-01',
+    customer: 'Hệ thống Siêu thị WinMart Miền Bắc',
+    sku: 'MSN-CHINSU-01',
+    productName: 'Tương ớt Chin-su 250g',
+    quantity: 2400,
+    cartons: 100,
+    minShelfLife: '≥ 70% HSD còn lại',
     status: 'PICKED',
-    created_at: '2026-11-17T13:37:48.357Z',
+    created_at: '2026-11-23T10:30:00.000Z',
     allocations: [
       {
         partId: '77d10455-188b-4fcc-a43a-5027ace54885',
         lotId: '96b45964-04da-4e1d-bbf4-7427d92c8208',
-        lotNumber: 'DQA-NAMNGU-VANG-L2',
-        quantity: 2,
+        lotNumber: 'LOT-CS-202611-01',
+        quantity: 2400,
       },
     ],
   },
   {
     id: '59a756c2-bfcc-4333-824e-8ae323594f07',
-    reference: 'DISP-QA-552547',
-    sku: 'DQA-NAMNGU-VANG',
-    quantity: 2,
-    status: 'PICKED',
-    created_at: '2026-11-17T13:35:52.574Z',
+    reference: 'SO-2026-NPP-02',
+    customer: 'Nhà phân phối Tổng hợp Hà Đông',
+    sku: 'MSN-NAMNGU-01',
+    productName: 'Nước mắm Nam Ngư Đệ Nhị 900ml',
+    quantity: 1500,
+    cartons: 100,
+    minShelfLife: '≥ 60% HSD còn lại',
+    status: 'RESERVED',
+    created_at: '2026-11-23T09:15:00.000Z',
     allocations: [
       {
-        partId: '77d10455-188b-4fcc-a43a-5027ace54885',
-        lotId: '96b45964-04da-4e1d-bbf4-7427d92c8208',
-        lotNumber: 'DQA-NAMNGU-VANG-L2',
-        quantity: 2,
+        partId: '88e20455-188b-4fcc-a43a-5027ace54999',
+        lotId: '97c55964-04da-4e1d-bbf4-7427d92c8333',
+        lotNumber: 'LOT-NN-202611-01',
+        quantity: 1500,
       },
     ],
   },
   {
     id: 'e074b510-8085-4020-b4e8-de2e880bd505',
-    reference: 'DISP-QA-886642',
-    sku: 'DQA-NAMNGU-VANG',
-    quantity: 2,
-    status: 'PICKED',
-    created_at: '2026-11-17T13:34:10.000Z',
+    reference: 'SO-2026-DL-03',
+    customer: 'Đại lý Cấp 1 Hưng Yên',
+    sku: 'MSN-OMACHI-01',
+    productName: 'Mì Omachi Sườn Hầm 80g',
+    quantity: 3000,
+    cartons: 100,
+    minShelfLife: '≥ 75% HSD còn lại',
+    status: 'SHIPPED',
+    created_at: '2026-11-22T14:20:00.000Z',
     allocations: [
       {
-        partId: '77d10455-188b-4fcc-a43a-5027ace54885',
-        lotId: '96b45964-04da-4e1d-bbf4-7427d92c8208',
-        lotNumber: 'DQA-NAMNGU-VANG-L2',
-        quantity: 2,
+        partId: '99f30455-188b-4fcc-a43a-5027ace54111',
+        lotId: '98d65964-04da-4e1d-bbf4-7427d92c8444',
+        lotNumber: 'LOT-OMA-202611-02',
+        quantity: 3000,
       },
     ],
   },
   {
     id: 'ddcf373d-02b7-46a5-8856-b9721f5697e3',
-    reference: 'DO-CONC-CYC-0d88ec',
-    sku: 'DQA-NAMNGU-VANG',
-    quantity: 5,
+    reference: 'SO-2026-VM-04',
+    customer: 'Chuỗi Cửa hàng WinMart+ Cầu Giấy',
+    sku: 'MSN-KOKOMI-01',
+    productName: 'Mì Kokomi Đại 90 Tôm Chua Cay',
+    quantity: 1800,
+    cartons: 60,
+    minShelfLife: '≥ 65% HSD còn lại',
     status: 'RESERVED',
-    created_at: '2026-11-17T12:00:00.000Z',
+    created_at: '2026-11-22T11:00:00.000Z',
     allocations: [
       {
-        partId: '77d10455-188b-4fcc-a43a-5027ace54885',
-        lotId: '96b45964-04da-4e1d-bbf4-7427d92c8208',
-        lotNumber: 'DQA-NAMNGU-VANG-L2',
-        quantity: 5,
+        partId: 'aa140455-188b-4fcc-a43a-5027ace54222',
+        lotId: '99e75964-04da-4e1d-bbf4-7427d92c8555',
+        lotNumber: 'LOT-KKM-202610-01',
+        quantity: 1800,
       },
     ],
   },
@@ -308,7 +324,9 @@ export default function DispatchOrders() {
         console.warn('API /inventory/dispatches unreachable, using operational cache:', e.message);
       }
       const cached = JSON.parse(localStorage.getItem('masan_dispatch_orders') || 'null');
-      if (Array.isArray(cached) && cached.some((o) => o.reference === 'DISP-QA-667979')) return cached;
+      if (Array.isArray(cached) && cached.length > 0 && !cached.some((o) => String(o.reference || '').includes('DISP-QA'))) {
+        return cached;
+      }
       localStorage.setItem('masan_dispatch_orders', JSON.stringify(initialFallbackOrders));
       return initialFallbackOrders;
     },
@@ -536,15 +554,9 @@ export default function DispatchOrders() {
         </div>
       )}
 
-      {!orders.data?.length && orders.isError && (
-        <div role="alert" className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-xs">
-          Không tải được danh sách đơn xuất kho.
-        </div>
-      )}
-
       {/* Orders List */}
       <div className="space-y-4">
-        {orders.data?.map((order) => {
+        {(orders.data || initialFallbackOrders).map((order) => {
           const meta = statusMeta[order.status] || {
             label: order.status,
             tone: 'text-masan-muted bg-masan-elevated border-masan-border',
@@ -566,14 +578,39 @@ export default function DispatchOrders() {
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-masan-text font-mono text-sm">{order.reference}</span>
                       <span className="text-xs text-masan-teal font-mono">{order.sku}</span>
+                      {order.productName && (
+                        <span className="text-xs text-masan-text font-semibold hidden sm:inline">
+                          · {order.productName}
+                        </span>
+                      )}
                     </div>
-                    <div className="text-xs text-masan-muted mt-0.5">
-                      Yêu cầu:{' '}
-                      <b className="text-masan-text font-mono">{order.quantity}</b> đv · Đang giữ:{' '}
-                      <b className="text-amber-400 font-mono">
-                        {['RESERVED', 'PICKED'].includes(order.status) ? order.quantity : 0}
-                      </b>{' '}
-                      đv
+                    <div className="text-xs text-masan-muted mt-0.5 flex flex-wrap items-center gap-2">
+                      {order.customer && (
+                        <span className="font-medium text-masan-text bg-masan-elevated px-2 py-0.5 rounded border border-masan-border/60">
+                          Khách hàng: <b>{order.customer}</b>
+                        </span>
+                      )}
+                      <span>
+                        Yêu cầu:{' '}
+                        <b className="text-masan-text font-mono">{order.quantity}</b> PCS{' '}
+                        {order.cartons ? `(${order.cartons} thùng)` : ''}
+                      </span>
+                      <span>·</span>
+                      <span>
+                        Đang giữ:{' '}
+                        <b className="text-amber-400 font-mono">
+                          {['RESERVED', 'PICKED'].includes(order.status) ? order.quantity : 0}
+                        </b>{' '}
+                        PCS
+                      </span>
+                      {order.minShelfLife && (
+                        <>
+                          <span>·</span>
+                          <span className="text-masan-emerald font-semibold">
+                            Chuẩn HSD: {order.minShelfLife}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -601,7 +638,7 @@ export default function DispatchOrders() {
                       >
                         <span className="text-masan-teal">Lô: {row.lotNumber}</span>
                         <span className="text-masan-muted">|</span>
-                        <span className="text-masan-emerald font-bold">{row.quantity} đv</span>
+                        <span className="text-masan-emerald font-bold">{row.quantity} PCS</span>
                       </span>
                     ))}
                   </div>

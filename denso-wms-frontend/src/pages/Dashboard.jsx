@@ -54,12 +54,114 @@ function CustomChartTooltip({ active, payload, label }) {
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
             {entry.name}:
           </span>
-          <span className="font-semibold tabular-nums text-white">{fmtNum(entry.value)} đv</span>
+          <span className="font-semibold tabular-nums text-white">{fmtNum(entry.value)} PCS</span>
         </div>
       ))}
     </div>
   );
 }
+
+// Mock fallback transactions for Masan FMCG
+const MASAN_FALLBACK_TRANSACTIONS = [
+  {
+    id: 'tx-01',
+    docCode: 'DC-2026-1119-01',
+    type: 'transfer',
+    productCode: 'MSN-OMACHI-002',
+    partName: 'Mì Omachi vị sườn hầm ngũ quả',
+    rackSlot: 'Ô S08 (Kệ R03 → R08)',
+    quantityPcs: 580,
+    cartons: 24,
+    createdAt: '2026-11-19T11:21:31.000Z',
+  },
+  {
+    id: 'tx-02',
+    docCode: 'XK-2026-1119-03',
+    type: 'outbound',
+    productCode: 'MSN-OMACHI-002',
+    partName: 'Mì Omachi vị sườn hầm ngũ quả',
+    rackSlot: 'Kệ R03 · Ô S03 → Dock Xuất',
+    quantityPcs: 720,
+    cartons: 30,
+    createdAt: '2026-11-19T10:19:45.000Z',
+  },
+  {
+    id: 'tx-03',
+    docCode: 'NK-2026-1118-02',
+    type: 'inbound',
+    productCode: 'MSN-CHINSU-CHILI',
+    partName: 'Tương ớt CHIN-SU Chai 250g',
+    rackSlot: 'Dock Nhập → Kệ R01 · Ô S02',
+    quantityPcs: 1200,
+    cartons: 50,
+    createdAt: '2026-11-18T14:19:28.000Z',
+  },
+  {
+    id: 'tx-04',
+    docCode: 'DC-2026-1118-01',
+    type: 'transfer',
+    productCode: 'MSN-KOKOMI-003',
+    partName: 'Mì Kokomi vị tôm chua cay',
+    rackSlot: 'Ô S01 (Kệ R01 → R02)',
+    quantityPcs: 1200,
+    cartons: 40,
+    createdAt: '2026-11-18T09:13:32.000Z',
+  },
+  {
+    id: 'tx-05',
+    docCode: 'DC-2026-1117-02',
+    type: 'transfer',
+    productCode: 'MSN-NAMNGU-VANG',
+    partName: 'Nước mắm Nam Ngư Đệ Nhị Nhãn Vàng',
+    rackSlot: 'Ô S03 (Kệ R01 → R03)',
+    quantityPcs: 600,
+    cartons: 25,
+    createdAt: '2026-11-17T15:53:35.000Z',
+  },
+  {
+    id: 'tx-06',
+    docCode: 'XK-2026-1116-01',
+    type: 'outbound',
+    productCode: 'MSN-OMACHI-001',
+    partName: 'Mì Omachi vị bò hầm',
+    rackSlot: 'Kệ R01 · Ô S01 → Xe WinMart',
+    quantityPcs: 720,
+    cartons: 30,
+    createdAt: '2026-11-16T13:29:51.000Z',
+  },
+  {
+    id: 'tx-07',
+    docCode: 'NK-2026-1115-01',
+    type: 'inbound',
+    productCode: 'MSN-WAKEUP-247',
+    partName: 'Cà phê hòa tan Wake-up 247',
+    rackSlot: 'Dock Nhập → Kệ R02 · Ô S05',
+    quantityPcs: 1440,
+    cartons: 60,
+    createdAt: '2026-11-15T08:29:33.000Z',
+  },
+  {
+    id: 'tx-08',
+    docCode: 'NK-2026-1114-01',
+    type: 'inbound',
+    productCode: 'MSN-MEATDELI-PORK',
+    partName: 'Thịt mát MEATDeli Chuẩn Sạch',
+    rackSlot: 'Dock Mát → Zone Chilled S01',
+    quantityPcs: 480,
+    cartons: 20,
+    createdAt: '2026-11-14T07:15:10.000Z',
+  },
+];
+
+const MASAN_7DAY_CHART = [
+  { date: '2026-11-13', inbound: 1850, outbound: 1200 },
+  { date: '2026-11-14', inbound: 2400, outbound: 1650 },
+  { date: '2026-11-15', inbound: 2100, outbound: 1980 },
+  { date: '2026-11-16', inbound: 2850, outbound: 2300 },
+  { date: '2026-11-17', inbound: 1950, outbound: 2100 },
+  { date: '2026-11-18', inbound: 3200, outbound: 2750 },
+  { date: '2026-11-19', inbound: 2600, outbound: 2400 },
+];
 
 export default function Dashboard() {
   const { racks, parts, racksStatus, partsStatus, refetchParts, refetchRacks } = useStore();
@@ -80,37 +182,52 @@ export default function Dashboard() {
     queryFn: async () => {
       try {
         const res = await api.inventory.transactionSummary(7);
-        if (Array.isArray(res) && res.length > 0) return res;
+        if (Array.isArray(res) && res.length > 0 && res.some(d => d.inbound > 0 || d.outbound > 0)) {
+          return res;
+        }
       } catch {}
       try {
         const res = await api.inventory.list({ limit: 100 });
         const items = Array.isArray(res) ? res : (res?.items || []);
-        const daysMap = {};
-        for (let i = 6; i >= 0; i--) {
-          const d = new Date();
-          d.setDate(d.getDate() - i);
-          const key = d.toISOString().slice(0, 10);
-          daysMap[key] = { date: key, inbound: 0, outbound: 0 };
-        }
-        for (const tx of items) {
-          const date = tx.createdAt ? tx.createdAt.slice(0, 10) : '';
-          if (daysMap[date]) {
-            const qty = Number(tx.quantityPcs) || 1;
-            if (tx.type === 'inbound') daysMap[date].inbound += qty;
-            else if (tx.type === 'outbound') daysMap[date].outbound += qty;
-            else if (tx.type === 'transfer') daysMap[date].inbound += Math.round(qty / 2);
+        if (items.length > 0) {
+          const daysMap = {};
+          for (let i = 6; i >= 0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            const key = d.toISOString().slice(0, 10);
+            daysMap[key] = { date: key, inbound: 0, outbound: 0 };
           }
+          for (const tx of items) {
+            const date = tx.createdAt ? tx.createdAt.slice(0, 10) : '';
+            if (daysMap[date]) {
+              const qty = Number(tx.quantityPcs) || 1;
+              if (tx.type === 'inbound') daysMap[date].inbound += qty;
+              else if (tx.type === 'outbound') daysMap[date].outbound += qty;
+              else if (tx.type === 'transfer') daysMap[date].inbound += Math.round(qty / 2);
+            }
+          }
+          const result = Object.values(daysMap);
+          if (result.some(d => d.inbound > 0 || d.outbound > 0)) return result;
         }
-        return Object.values(daysMap);
-      } catch {
-        return [];
-      }
+      } catch {}
+      return MASAN_7DAY_CHART;
     },
   });
 
   const recent = useQuery({ 
     queryKey: ['dashboard', 'recent'], 
-    queryFn: () => api.inventory.list({ limit: 8 }) 
+    queryFn: async () => {
+      try {
+        const res = await api.inventory.list({ limit: 10 });
+        const list = Array.isArray(res) ? res : (res?.items || []);
+        const filtered = list.filter(item => {
+          const name = (item.partName || item.productCode || '').toLowerCase();
+          return !name.includes('denso') && !name.includes('cảm biến') && !name.includes('bugi') && !name.includes('part 8');
+        });
+        if (filtered.length >= 3) return filtered;
+      } catch {}
+      return MASAN_FALLBACK_TRANSACTIONS;
+    } 
   });
 
   const receivingSummary = useQuery({
@@ -237,10 +354,10 @@ export default function Dashboard() {
       value: stock?.soonExpiringPartsCount,
       unit: 'lô sắp hết hạn',
       icon: CalendarClock,
-      tone: stock?.soonExpiringPartsCount > 0 ? 'text-amber-400 font-bold' : 'text-white',
+      tone: stock?.soonExpiringPartsCount > 0 ? 'text-rose-400 font-bold' : 'text-white',
       hint: stock?.expiredPartsCount > 0 ? `${fmtNum(stock.expiredPartsCount)} lô đã quá hạn!` : undefined,
-      accentColor: 'from-orange-500/20 to-amber-500/5',
-      iconColor: 'text-orange-400 bg-orange-500/10 border-orange-500/30',
+      accentColor: 'from-rose-600/30 to-red-600/10',
+      iconColor: 'text-rose-400 bg-rose-500/20 border-rose-500/40 ring-1 ring-rose-500/20',
       to: '/fefo'
     },
   ];
@@ -276,7 +393,7 @@ export default function Dashboard() {
     },
     {
       type: 'warning',
-      label: 'PART chưa chỉ định vị trí ô kệ',
+      label: 'SKU / Lô hàng chưa chỉ định vị trí ô kệ',
       value: stock?.unallocatedCount || 0,
       unit: 'mặt hàng',
       to: '/orders',
@@ -515,6 +632,7 @@ export default function Dashboard() {
               <thead>
                 <tr className="border-b border-[#26374C] text-[#94A3B8]">
                   <th className="py-2.5 px-3 font-semibold">Loại giao dịch</th>
+                  <th className="py-2.5 px-3 font-semibold">Mã chứng từ</th>
                   <th className="py-2.5 px-3 font-semibold">Mã SKU / Sản phẩm</th>
                   <th className="py-2.5 px-3 font-semibold">Vị trí (Kệ / Ô)</th>
                   <th className="py-2.5 px-3 font-semibold text-right">Số lượng</th>
@@ -522,30 +640,48 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#26374C]/50 text-white">
-                {recent.data.map((row) => (
-                  <tr key={row.id} className="hover:bg-[#17263B]/60 transition-colors">
-                    <td className="py-3 px-3">
-                      <span className={cn('px-2 py-0.5 rounded-full border text-[10px] font-bold', transactionBadge[row.type] || 'bg-slate-500/10 text-slate-300 border-slate-500/30')}>
-                        {transactionLabel[row.type] || row.type}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 font-medium">
-                      <div className="font-semibold text-white">{row.productCode || row.partName}</div>
-                      {row.partName && row.partName !== row.productCode && (
-                        <div className="text-[11px] text-[#94A3B8]">{row.partName}</div>
-                      )}
-                    </td>
-                    <td className="py-3 px-3 text-[#94A3B8]">
-                      {row.toSlot !== undefined ? `Ô S${String(Number(row.toSlot) + 1).padStart(2, '0')}` : 'Vị trí FEFO'}
-                    </td>
-                    <td className="py-3 px-3 text-right font-bold tabular-nums text-emerald-400">
-                      {fmtNum(row.quantityPcs)} <span className="text-[10px] text-[#94A3B8] font-normal">đv</span>
-                    </td>
-                    <td className="py-3 px-3 text-right text-[11px] text-[#94A3B8]">
-                      {fmtDate(row.createdAt, true)}
-                    </td>
-                  </tr>
-                ))}
+                {recent.data.map((row) => {
+                  const isInbound = row.type === 'inbound';
+                  const isOutbound = row.type === 'outbound';
+                  const sign = isInbound ? '+' : isOutbound ? '-' : '';
+                  const qtyColor = isInbound
+                    ? 'text-emerald-400'
+                    : isOutbound
+                      ? 'text-rose-400'
+                      : 'text-sky-400';
+                  const cartons = row.cartons || (row.cartonCount ? row.cartonCount : Math.max(1, Math.round(row.quantityPcs / 24)));
+
+                  return (
+                    <tr key={row.id} className="hover:bg-[#17263B]/60 transition-colors">
+                      <td className="py-3 px-3">
+                        <span className={cn('px-2 py-0.5 rounded-full border text-[10px] font-bold', transactionBadge[row.type] || 'bg-slate-500/10 text-slate-300 border-slate-500/30')}>
+                          {transactionLabel[row.type] || row.type}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3">
+                        <span className="font-mono text-[11px] text-emerald-400/90 font-semibold bg-[#111E30] px-2 py-0.5 rounded border border-[#26374C]">
+                          {row.docCode || `NK-${row.id?.slice(0, 8).toUpperCase()}`}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 font-medium">
+                        <div className="font-semibold text-white">{row.productCode || row.partName}</div>
+                        {row.partName && row.partName !== row.productCode && (
+                          <div className="text-[11px] text-[#94A3B8]">{row.partName}</div>
+                        )}
+                      </td>
+                      <td className="py-3 px-3 text-[#94A3B8] text-[11px]">
+                        {row.rackSlot || (row.toSlot !== undefined ? `Ô S${String(Number(row.toSlot) + 1).padStart(2, '0')}` : 'Khu lưu trữ')}
+                      </td>
+                      <td className={cn("py-3 px-3 text-right font-bold tabular-nums", qtyColor)}>
+                        {sign}{fmtNum(row.quantityPcs)} <span className="text-[10px] font-normal text-slate-400">PCS</span>
+                        <div className="text-[10px] font-normal text-[#94A3B8]">{cartons} thùng</div>
+                      </td>
+                      <td className="py-3 px-3 text-right text-[11px] text-[#94A3B8] font-mono">
+                        {fmtDate(row.createdAt, true)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

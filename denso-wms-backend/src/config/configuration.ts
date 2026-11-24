@@ -14,8 +14,17 @@ export default () => ({
     .map((origin) => origin.trim())
     .filter(Boolean),
   database: {
-    host: process.env.DB_HOST,
-    port: parseInt(process.env.DB_PORT || '5432', 10),
+    host:
+      process.env.DB_HOST?.includes(':') && !process.env.DB_HOST.startsWith('[')
+        ? process.env.DB_HOST.split(':')[0]
+        : process.env.DB_HOST,
+    port: parseInt(
+      process.env.DB_PORT ||
+        (process.env.DB_HOST?.includes(':') && !process.env.DB_HOST.startsWith('[')
+          ? process.env.DB_HOST.split(':')[1]
+          : '5432'),
+      10,
+    ),
     username: process.env.DB_USERNAME,
     password: process.env.DB_PASSWORD,
     name: process.env.DB_NAME,

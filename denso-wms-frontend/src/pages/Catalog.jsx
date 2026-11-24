@@ -92,7 +92,7 @@ function BrandSection({ brand, isService, parts, racks, orderId, canCreate, onLo
                       aria-label={`Thêm ${name} vào lô hiện có`}
                       className="flex shrink-0 items-center gap-1 rounded-md border border-masan-emerald/30 bg-masan-emerald/10 px-2 py-1 text-[11px] font-semibold text-masan-emerald transition hover:bg-masan-emerald/20 focus-visible:outline-none"
                     >
-                      <PackagePlus className="h-3 w-3" /> <span className="hidden sm:inline">Tạo PART</span>
+                      <PackagePlus className="h-3 w-3" /> <span className="hidden sm:inline">Tạo SKU</span>
                     </Link>
                   )}
                 </div>
@@ -190,7 +190,7 @@ export default function Catalog() {
             <div className="mt-4 space-y-2">
               {locating.matches.length === 0 ? (
                 <p className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-3 text-xs text-amber-300">
-                  Sản phẩm này chưa có bản ghi tồn kho; cần tạo PART trước khi tra cứu vị trí.
+                  Sản phẩm này chưa có bản ghi tồn kho; cần tạo SKU trước khi tra cứu vị trí.
                 </p>
               ) : (
                 locating.matches.map((part) => {
@@ -261,7 +261,7 @@ export default function Catalog() {
             ['Ngành hàng FMCG', MASAN_CATEGORIES.length],
             ['Thương hiệu', MASAN_BRAND_COUNT],
             ['Sản phẩm mẫu', MASAN_REFERENCE_PRODUCTS.length],
-            ['PARTs trên kệ', parts.length],
+            ['SKU trên kệ', parts.length],
           ].map(([label, value]) => (
             <div key={label} className="rounded-xl border border-masan-border bg-masan-elevated/50 p-3">
               <p className="text-[11px] text-masan-muted">{label}</p>
@@ -275,14 +275,14 @@ export default function Catalog() {
       <div className="flex items-start gap-2.5 rounded-xl border border-sky-500/20 bg-sky-500/10 p-3.5 text-xs leading-relaxed text-sky-300">
         <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-400" />
         <p>
-          <b>Hướng dẫn tích hợp:</b> Bấm <b>Tạo PART</b> cạnh tên sản phẩm để mở biểu mẫu và tự điền tên vào lô hàng. Bạn chỉ cần nhập mã SKU nội bộ, số lô, hạn dùng và chỉ định ô kệ.
+          <b>Hướng dẫn tích hợp:</b> Bấm <b>Tạo SKU</b> cạnh tên sản phẩm để mở biểu mẫu và tự điền tên vào lô hàng. Bạn chỉ cần nhập mã SKU nội bộ, số lô, hạn dùng và chỉ định ô kệ.
         </p>
       </div>
 
       {canCreate && orders.length > 1 && (
         <div className="rounded-xl border border-masan-border bg-masan-surface p-4">
           <label htmlFor="target-order" className="block text-xs font-semibold text-masan-text">
-            Chọn lô hàng đích trước khi tạo PART từ danh mục
+            Chọn lô hàng đích trước khi tạo SKU từ danh mục
           </label>
           <select
             id="target-order"

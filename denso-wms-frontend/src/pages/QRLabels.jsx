@@ -27,7 +27,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LOAD_STATUS_META, RACK_SAFETY, loadStatus } from '@/lib/viz/rackSafety';
 
-const WAREHOUSE_CODE = 'DENSO-WH';
+const WAREHOUSE_CODE = 'MASAN-HN-01';
 const LABEL_PRESETS = {
   small: { label: '50 × 30 mm', widthMm: 50, heightMm: 30 },
   medium: { label: '70 × 40 mm', widthMm: 70, heightMm: 40 },
@@ -38,7 +38,7 @@ const TYPES = [
   { value: 'zone', label: 'QR Zone', icon: Layers3 },
   { value: 'rack', label: 'QR Kệ', icon: Warehouse },
   { value: 'slot', label: 'QR Ô', icon: QrCode },
-  { value: 'part', label: 'QR PART', icon: Package },
+  { value: 'part', label: 'QR SKU', icon: Package },
 ];
 const STATUS_ORDER = ['all', 'empty', 'active', 'near', 'full', 'overload'];
 const STATUS_LABEL = {
@@ -243,12 +243,7 @@ export default function QRLabels() {
           cartonCount,
           partCount: slotParts.length,
           part: firstPart,
-          detail: firstPart
-            ? `${firstPart.partName} · ${firstPart.productCode || firstPart.masterPo} · ${cartonCount} thùng · ${weightKg.toLocaleString(
-                'vi-VN',
-                { maximumFractionDigits: 1 },
-              )} kg`
-            : 'Ô trống',
+          detail: `Tọa độ vị trí: Tầng ${Math.floor(index / 5) + 1} · Khoang ${(index % 5) + 1} · Tải tối đa: 250 kg`,
         };
       }),
     [rackParts, rack, rackId, publicBase, zoneCode],
@@ -268,12 +263,12 @@ export default function QRLabels() {
           kind: 'rack',
           kindLabel: 'Kệ kho',
           title: r.name,
-          subtitle: `${r.warehouseCode} / ${r.zoneCode}`,
+          subtitle: `${r.warehouseCode || WAREHOUSE_CODE} / ${r.zoneCode}`,
           code,
           barcodeValue: code,
           qrValue: `${publicBase}/racks/${r.id}/plan`,
           status: st,
-          detail: `${usedSlots}/${SLOTS_PER_RACK} ô · ${rp.length} PART · ${weightKg.toLocaleString('vi-VN')} kg`,
+          detail: `${usedSlots}/${SLOTS_PER_RACK} ô · ${rp.length} SKU · ${weightKg.toLocaleString('vi-VN')} kg`,
           rack: r,
         };
       }),
@@ -300,7 +295,7 @@ export default function QRLabels() {
           barcodeValue: code,
           qrValue: `${publicBase}/racks?zone=${encodeURIComponent(z.code)}`,
           status: zp.length ? 'active' : 'empty',
-          detail: `${zr.length} kệ · ${zp.length} PART`,
+          detail: `${zr.length} kệ · ${zp.length} SKU`,
         };
       }),
     [zones, racks, parts, publicBase],
@@ -318,7 +313,7 @@ export default function QRLabels() {
         return {
           key: `part:${p.id}`,
           kind: 'part',
-          kindLabel: 'Linh kiện / PART',
+          kindLabel: 'Sản phẩm / SKU',
           title: p.partName,
           subtitle: `${code} · ${pr?.zoneCode || zoneCode} / ${loc}`,
           code,
@@ -566,7 +561,7 @@ export default function QRLabels() {
                 : [...new Set(racks.map((r) => r.zoneCode))].filter(Boolean).map((code) => ({ code, name: code }))
               ).map((z) => (
                 <option key={z.code} value={z.code}>
-                  {z.code} · {z.name}
+                  {z.name && z.name !== z.code ? `${z.code} · ${z.name}` : z.code}
                 </option>
               ))}
             </select>

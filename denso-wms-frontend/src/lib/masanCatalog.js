@@ -43,7 +43,7 @@ export const MASAN_CATEGORIES = [
       { name: 'Compact', products: ['Nước tăng lực Compact'] },
       { name: 'EnerZ', products: ['Nước tăng lực EnerZ'] },
       { name: 'Lemona', products: ['Nước giải khát Lemona'] },
-      { name: 'BupnonTEA 365', products: ['Trà đóng chai BupnonTEA 365'] },
+      { name: 'Búp Non Tea 365', products: ['Trà đóng chai Búp Non Tea 365'] },
     ],
   },
   {

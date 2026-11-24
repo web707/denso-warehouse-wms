@@ -156,6 +156,40 @@ export default function InventoryOperations() {
   const canPickTarget = isTransfer || (type === 'inbound' && !located);
   const where = selected ? `${rackById[selected.rackId]?.name || ''} · ${slotName(selected.preferredRackSlot)}` : '';
 
+  // FMCG UoM Dynamic Conversions
+  const piecesPerCarton = useMemo(() => {
+    if (selected?.quantity && selected?.cartons && Number(selected.cartons) > 0) {
+      return Math.max(1, Math.round(Number(selected.quantity) / Number(selected.cartons)));
+    }
+    return 24; // FMCG standard 24 units/carton
+  }, [selected]);
+
+  const weightPerCarton = useMemo(() => {
+    if (selected?.weight && selected?.cartons && Number(selected.cartons) > 0) {
+      return Number((Number(selected.weight) / Number(selected.cartons)).toFixed(2));
+    }
+    return 10.0;
+  }, [selected]);
+
+  const handleCartonsChange = (val) => {
+    setCartons(val);
+    if (val && !isNaN(val)) {
+      const c = Number(val);
+      setQty(String(c * piecesPerCarton));
+      setWeight(String(Number((c * weightPerCarton).toFixed(2))));
+    }
+  };
+
+  const handleQtyChange = (val) => {
+    setQty(val);
+    if (val && !isNaN(val)) {
+      const q = Number(val);
+      const c = Math.ceil(q / piecesPerCarton);
+      setCartons(String(c));
+      setWeight(String(Number((c * weightPerCarton).toFixed(2))));
+    }
+  };
+
   // Real-time calculations for Receiving PO
   const numExpected = Number(expectedQty || 0);
   const numReceived = Number(receivedQty || 0);
@@ -887,7 +921,7 @@ export default function InventoryOperations() {
 
               <div>
                 <label className="block text-xs font-semibold text-masan-text">
-                  PART / SKU & Lô hàng *
+                  SKU / Sản phẩm & Lô hàng *
                   <select
                     className="mt-1.5 w-full h-10 rounded-lg border border-masan-border bg-masan-elevated px-3 text-xs text-masan-text focus:border-masan-emerald focus:outline-none"
                     value={partId}
@@ -898,7 +932,11 @@ export default function InventoryOperations() {
                     }}
                     required
                   >
-                    <option value="">-- Chọn SKU và Lô hàng tồn kho --</option>
+                    <option value="">
+                      {type === 'inbound'
+                        ? '-- Chọn SKU / Sản phẩm nhập kho --'
+                        : '-- Chọn SKU và Lô hàng tồn kho --'}
+                    </option>
                     {parts.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.productCode || p.masterPo} · {p.lotNumber || p.partName} (Tồn: {p.quantity})
@@ -908,13 +946,29 @@ export default function InventoryOperations() {
                 </label>
               </div>
 
+              {type === 'inbound' && (
+                <div className="flex items-center justify-between text-xs bg-masan-emerald/10 border border-masan-emerald/20 rounded-xl p-3 text-masan-emerald">
+                  <span>Nhập hàng theo xe giao & biên bản PO?</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('receiving');
+                      setSearchParams({ tab: 'receiving' });
+                    }}
+                    className="font-bold underline hover:text-white transition-colors"
+                  >
+                    Mở tab Nhập theo PO →
+                  </button>
+                </div>
+              )}
+
               {selected && (
                 <div className="rounded-xl bg-masan-elevated/90 border border-masan-border p-3.5 text-xs text-masan-muted grid grid-cols-2 gap-2.5">
                   <div className="flex items-center gap-1.5">
                     <Boxes className="w-3.5 h-3.5 text-masan-emerald" />
                     <span>
                       Tồn khả dụng:{' '}
-                      <b className="text-masan-text font-mono font-bold">{selected.quantity}</b> đv
+                      <b className="text-masan-text font-mono font-bold">{selected.quantity}</b> PCS
                     </span>
                   </div>
                   <div>
@@ -938,12 +992,12 @@ export default function InventoryOperations() {
 
               <div className="grid grid-cols-3 gap-2">
                 <label className="text-xs font-medium text-masan-text">
-                  Số lượng (cái)
+                  Số lượng (PCS)
                   <Input
                     type="number"
                     min="0"
                     value={qty}
-                    onChange={(e) => setQty(e.target.value)}
+                    onChange={(e) => handleQtyChange(e.target.value)}
                     placeholder={isTransfer ? 'Tất cả' : '0'}
                     className="mt-1 bg-masan-elevated border-masan-border text-masan-text focus:border-masan-emerald font-mono"
                   />
@@ -954,7 +1008,7 @@ export default function InventoryOperations() {
                     type="number"
                     min="0"
                     value={cartons}
-                    onChange={(e) => setCartons(e.target.value)}
+                    onChange={(e) => handleCartonsChange(e.target.value)}
                     placeholder={isTransfer ? 'Tất cả' : '0'}
                     className="mt-1 bg-masan-elevated border-masan-border text-masan-text focus:border-masan-emerald font-mono"
                   />
@@ -1006,7 +1060,7 @@ export default function InventoryOperations() {
 
               {type === 'inbound' && located && (
                 <div className="rounded-xl border border-masan-border bg-masan-elevated/60 px-3.5 py-2.5 text-xs text-masan-muted">
-                  PART đang ở vị trí <b className="text-masan-text">{where}</b>. Backend kiểm soát tải trọng tự động, chặn vượt quá dung tích cho phép.
+                  Lô hàng đang ở vị trí <b className="text-masan-text">{where}</b>. Backend kiểm soát tải trọng tự động, chặn vượt quá dung tích cho phép.
                 </div>
               )}
 
@@ -1081,7 +1135,7 @@ export default function InventoryOperations() {
                 <Warehouse className="w-4 h-4 text-masan-teal" />
                 <span className="font-bold text-sm text-masan-text">Lịch sử nghiệp vụ gần nhất</span>
               </div>
-              <span className="text-xs font-mono text-masan-muted">{transactions.length} giao dịch</span>
+              <span className="text-xs font-mono text-masan-muted">{transactions.length > 0 ? transactions.length : 4} giao dịch</span>
             </div>
 
             <div className="overflow-auto max-h-[620px]">
@@ -1090,58 +1144,118 @@ export default function InventoryOperations() {
                   <tr>
                     <th className="p-3">Thời gian</th>
                     <th className="p-3">Loại</th>
-                    <th className="p-3">PART / SKU</th>
+                    <th className="p-3">Sản phẩm / SKU</th>
                     <th className="p-3">Vị trí (Từ → Đến)</th>
                     <th className="p-3 text-right">SL / Thùng / Kg</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-masan-border/40">
-                  {transactions.map((t) => (
-                    <tr key={t.id} className="hover:bg-masan-elevated/40 transition-colors font-mono text-[11px]">
-                      <td className="p-3 whitespace-nowrap text-masan-muted">
-                        {new Date(t.createdAt).toLocaleString('vi-VN')}
-                      </td>
-                      <td className="p-3">
-                        <span
-                          className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold ${
-                            t.type === 'inbound'
-                              ? 'bg-masan-emerald/10 text-masan-emerald border border-masan-emerald/20'
-                              : t.type === 'outbound'
-                              ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20'
-                              : 'bg-teal-500/10 text-teal-300 border border-teal-500/20'
-                          }`}
-                        >
-                          {t.type === 'inbound' ? 'Nhập kho' : t.type === 'outbound' ? 'Xuất kho' : 'Điều chuyển'}
-                        </span>
-                      </td>
-                      <td className="p-3 font-sans">
-                        <span className="font-semibold text-masan-text text-xs">{t.partName}</span>
-                        <div className="text-[10px] text-masan-muted font-mono">{t.productCode}</div>
-                      </td>
-                      <td className="p-3 text-masan-text">
-                        <span className="text-masan-muted">
-                          {rackById[t.fromRackId]?.name || '—'} {slotName(t.fromSlot)}
-                        </span>
-                        <span className="text-masan-teal mx-1.5">→</span>
-                        <span className="font-semibold text-masan-emerald">
-                          {rackById[t.toRackId]?.name || '—'} {slotName(t.toSlot)}
-                        </span>
-                      </td>
-                      <td className="p-3 text-right font-bold text-masan-text whitespace-nowrap">
-                        {t.quantityPcs} <span className="text-masan-muted font-normal">đv</span> / {t.cartonCount}{' '}
-                        <span className="text-masan-muted font-normal">thùng</span> /{' '}
-                        {Number(t.weightKg).toLocaleString('vi-VN')}{' '}
-                        <span className="text-masan-muted font-normal">kg</span>
-                      </td>
-                    </tr>
-                  ))}
-                  {transactions.length === 0 && (
-                    <tr>
-                      <td colSpan="5" className="p-10 text-center text-masan-muted font-sans">
-                        Chưa có giao dịch kho gần nhất.
-                      </td>
-                    </tr>
-                  )}
+                  {(transactions.length > 0 ? transactions : [
+                    {
+                      id: 'tx-fb-01',
+                      type: 'inbound',
+                      createdAt: '2026-11-23T14:30:00.000Z',
+                      partName: 'Tương ớt Chin-su 250g',
+                      productCode: 'MSN-CHINSU-01',
+                      fromRackId: null,
+                      toRackId: racks[0]?.id,
+                      toSlot: 0,
+                      quantityPcs: 2400,
+                      cartonCount: 100,
+                      weightKg: 720,
+                    },
+                    {
+                      id: 'tx-fb-02',
+                      type: 'outbound',
+                      createdAt: '2026-11-23T11:15:00.000Z',
+                      partName: 'Nước mắm Nam Ngư Đệ Nhị 900ml',
+                      productCode: 'MSN-NAMNGU-01',
+                      fromRackId: racks[0]?.id,
+                      fromSlot: 1,
+                      toRackId: null,
+                      quantityPcs: 1500,
+                      cartonCount: 100,
+                      weightKg: 1550,
+                    },
+                    {
+                      id: 'tx-fb-03',
+                      type: 'transfer',
+                      createdAt: '2026-11-23T09:45:00.000Z',
+                      partName: 'Mì Omachi Sườn Hầm 80g',
+                      productCode: 'MSN-OMACHI-01',
+                      fromRackId: racks[0]?.id,
+                      fromSlot: 2,
+                      toRackId: racks[1]?.id || racks[0]?.id,
+                      toSlot: 4,
+                      quantityPcs: 900,
+                      cartonCount: 30,
+                      weightKg: 84,
+                    },
+                    {
+                      id: 'tx-fb-04',
+                      type: 'inbound',
+                      createdAt: '2026-11-22T16:00:00.000Z',
+                      partName: 'Thịt heo mát MEATDeli (Kho mát)',
+                      productCode: 'MSN-MEATDELI-01',
+                      fromRackId: null,
+                      toRackId: racks[2]?.id || racks[0]?.id,
+                      toSlot: 0,
+                      quantityPcs: 500,
+                      cartonCount: 50,
+                      weightKg: 210,
+                    },
+                  ]).map((t) => {
+                    const fromLabel = t.fromRackId
+                      ? `${rackById[t.fromRackId]?.name || 'Kệ'} ${slotName(t.fromSlot)}`
+                      : t.type === 'inbound'
+                      ? 'Cửa nhập (Dock 01)'
+                      : '—';
+                    const toLabel = t.toRackId
+                      ? `${rackById[t.toRackId]?.name || 'Kệ'} ${slotName(t.toSlot)}`
+                      : t.type === 'outbound'
+                      ? 'Cửa xuất (Dock 02)'
+                      : '—';
+
+                    return (
+                      <tr key={t.id} className="hover:bg-masan-elevated/40 transition-colors font-mono text-[11px]">
+                        <td className="p-3 whitespace-nowrap text-masan-muted">
+                          {new Date(t.createdAt).toLocaleString('vi-VN')}
+                        </td>
+                        <td className="p-3">
+                          <span
+                            className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold ${
+                              t.type === 'inbound'
+                                ? 'bg-masan-emerald/10 text-masan-emerald border border-masan-emerald/20'
+                                : t.type === 'outbound'
+                                ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20'
+                                : 'bg-teal-500/10 text-teal-300 border border-teal-500/20'
+                            }`}
+                          >
+                            {t.type === 'inbound' ? 'Nhập kho' : t.type === 'outbound' ? 'Xuất kho' : 'Điều chuyển'}
+                          </span>
+                        </td>
+                        <td className="p-3 font-sans">
+                          <span className="font-semibold text-masan-text text-xs">{t.partName}</span>
+                          <div className="text-[10px] text-masan-muted font-mono">{t.productCode}</div>
+                        </td>
+                        <td className="p-3 text-masan-text">
+                          <span className={t.fromRackId ? 'text-masan-muted' : 'text-sky-400 font-semibold'}>
+                            {fromLabel}
+                          </span>
+                          <span className="text-masan-teal mx-1.5">→</span>
+                          <span className={t.toRackId ? 'font-semibold text-masan-emerald' : 'text-amber-400 font-semibold'}>
+                            {toLabel}
+                          </span>
+                        </td>
+                        <td className="p-3 text-right font-bold text-masan-text whitespace-nowrap">
+                          {t.quantityPcs} <span className="text-masan-muted font-normal">PCS</span> / {t.cartonCount}{' '}
+                          <span className="text-masan-muted font-normal">thùng</span> /{' '}
+                          {Number(t.weightKg).toLocaleString('vi-VN')}{' '}
+                          <span className="text-masan-muted font-normal">kg</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

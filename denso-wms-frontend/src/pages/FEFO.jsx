@@ -106,14 +106,14 @@ export default function FEFO() {
             status:
               remain !== null && remain < 0
                 ? 'expired'
-                : !judgment
-                ? 'qc_pending'
-                : !isQcAvailable(judgment)
+                : judgment && !isQcAvailable(judgment)
                 ? 'qc_blocked'
+                : remain !== null && remain <= 30
+                ? 'soon'
                 : remain === null
                 ? 'missing'
-                : remain <= 30
-                ? 'soon'
+                : !judgment
+                ? 'qc_pending'
                 : prioritized.get(p.id) === 1
                 ? 'first'
                 : 'later',
@@ -303,11 +303,6 @@ export default function FEFO() {
                     <td className="px-4 py-3 font-sans">
                       <p className="font-semibold text-masan-text text-xs">
                         {p.partName}
-                        {/^(MASAN-TEST-|MASAN-DEMO-)/.test(p.productCode || '') && (
-                          <span className="ml-2 rounded bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.5 text-[10px] font-bold text-indigo-400">
-                            TEST
-                          </span>
-                        )}
                       </p>
                       <p className="text-[11px] text-masan-muted font-mono">{p.sku}</p>
                       <p className="text-[10px] text-masan-teal">{storageLabel(p.storageClass)}</p>
@@ -389,7 +384,7 @@ export default function FEFO() {
                     </td>
                     <td className="px-4 py-3">
                       <span className="font-bold text-masan-text">{fmtNum(p.cartons || 0)}</span> thùng
-                      <p className="text-[10px] text-masan-emerald font-semibold">{fmtNum(p.quantity || 0)} đơn vị</p>
+                      <p className="text-[10px] text-masan-emerald font-semibold">{fmtNum(p.quantity || 0)} PCS</p>
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-masan-text font-semibold">

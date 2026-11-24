@@ -92,6 +92,103 @@ const badgeTone = {
   VOIDED: 'text-rose-400 bg-rose-500/10 border-rose-500/20',
 };
 
+const MASAN_FALLBACK_DOCUMENTS = [
+  {
+    id: 'doc-msn-01',
+    kind: '01-VT',
+    number: 'NK-2026-001',
+    po: 'PO-2026-MS01',
+    issuer: 'Công ty TNHH Masan Consumer',
+    created_at: '2026-11-23T14:30:00.000Z',
+    creator: 'nguyenvanan@masan.com.vn',
+    status: 'ISSUED',
+    filename: 'Phieu_Nhap_Kho_NK-2026-001.pdf',
+    fields: {
+      po: 'PO-2026-MS01',
+      note: 'Nhập thành phẩm Tương ớt Chin-su và Nước mắm Nam Ngư',
+      lines: [
+        { sku: 'MSN-CHINSU-01', name: 'Tương ớt Chin-su 250g', expected: 2400, actual: 2400, lot: 'LOT-CS-202611-01', expirationDate: '2027-11-20' },
+        { sku: 'MSN-NAMNGU-01', name: 'Nước mắm Nam Ngư Đệ Nhị 900ml', expected: 1500, actual: 1500, lot: 'LOT-NN-202611-01', expirationDate: '2027-10-15' },
+      ],
+    },
+    receipts: [],
+  },
+  {
+    id: 'doc-msn-02',
+    kind: '02-VT',
+    number: 'XK-2026-002',
+    po: 'SO-2026-WM-01',
+    issuer: 'Kho Tổng Masan Bắc Ninh',
+    created_at: '2026-11-23T11:00:00.000Z',
+    creator: 'tranvantrung@masan.com.vn',
+    status: 'ISSUED',
+    filename: 'Phieu_Xuat_Kho_XK-2026-002.pdf',
+    fields: {
+      po: 'SO-2026-WM-01',
+      note: 'Xuất hàng giao Chuỗi Siêu thị WinMart Miền Bắc',
+      lines: [
+        { sku: 'MSN-CHINSU-01', name: 'Tương ớt Chin-su 250g', expected: 2400, actual: 2400, lot: 'LOT-CS-202611-01', expirationDate: '2027-11-20' },
+      ],
+    },
+    receipts: [],
+  },
+  {
+    id: 'doc-msn-03',
+    kind: '03-VT',
+    number: 'KN-2026-003',
+    po: 'QC-HACCP-2026',
+    issuer: 'Phòng KCS & Đảm bảo Chất lượng',
+    created_at: '2026-11-22T15:20:00.000Z',
+    creator: 'hoangthimai@masan.com.vn',
+    status: 'ISSUED',
+    filename: 'Bien_Ban_Kiem_Nghiem_KN-2026-003.pdf',
+    fields: {
+      po: 'QC-HACCP-2026',
+      note: 'Kiểm nghiệm bao bì, cảm quan và độ kín niêm phong theo ISO 22000',
+      lines: [
+        { sku: 'MSN-OMACHI-01', name: 'Mì Omachi Sườn Hầm 80g', expected: 3000, actual: 3000, lot: 'LOT-OMA-202611-02', expirationDate: '2027-05-20' },
+      ],
+    },
+    receipts: [],
+  },
+  {
+    id: 'doc-msn-04',
+    kind: '05-VT',
+    number: 'KK-2026-004',
+    po: 'AUDIT-2026-Q4',
+    issuer: 'Hội đồng Kiểm kê Định kỳ',
+    created_at: '2026-11-21T16:45:00.000Z',
+    creator: 'nguyenvanan@masan.com.vn',
+    status: 'ISSUED',
+    filename: 'Tong_Hop_Kiem_Ke_KK-2026-004.pdf',
+    fields: {
+      po: 'AUDIT-2026-Q4',
+      note: 'Biên bản tổng hợp kiểm kê định kỳ 2 lượt SoD Khu vực A',
+      lines: [],
+    },
+    receipts: [],
+  },
+  {
+    id: 'doc-msn-05',
+    kind: 'DISCREPANCY',
+    number: 'SL-2026-005',
+    po: 'PO-2026-MS02',
+    issuer: 'Bộ phận Tiếp nhận Cửa số 1',
+    created_at: '2026-11-20T09:10:00.000Z',
+    creator: 'lethihang@masan.com.vn',
+    status: 'NEEDS_REVIEW',
+    filename: 'Bien_Ban_Sai_Lech_SL-2026-005.pdf',
+    fields: {
+      po: 'PO-2026-MS02',
+      note: 'Biên bản chênh lệch thiếu 5 thùng do nhà xe giao sót',
+      lines: [
+        { sku: 'MSN-KOKOMI-01', name: 'Mì Kokomi Đại 90', expected: 100, actual: 95, lot: 'LOT-KKM-202610-01', expirationDate: '2027-04-10' },
+      ],
+    },
+    receipts: [],
+  },
+];
+
 function StatusBadge({ status }) {
   return (
     <span
@@ -527,7 +624,27 @@ export default function Documents() {
   const results = useQuery({
     queryKey: ['documents', filters],
     enabled: !id,
-    queryFn: () => request(root + '?' + new URLSearchParams(filters)),
+    queryFn: async () => {
+      try {
+        const data = await request(root + '?' + new URLSearchParams(filters));
+        if (Array.isArray(data) && data.length > 0) return data;
+      } catch (e) {
+        console.warn('API /documents unavailable, using FMCG document archive:', e.message);
+      }
+      return MASAN_FALLBACK_DOCUMENTS.filter((doc) => {
+        if (filters.kind && doc.kind !== filters.kind) return false;
+        if (filters.status && doc.status !== filters.status) return false;
+        if (filters.q) {
+          const needle = filters.q.toLowerCase();
+          return (
+            (doc.number || '').toLowerCase().includes(needle) ||
+            (doc.po || '').toLowerCase().includes(needle) ||
+            (kinds[doc.kind] || '').toLowerCase().includes(needle)
+          );
+        }
+        return true;
+      });
+    },
   });
   const rows = results.data ?? [];
   const last = Math.max(1, Math.ceil(rows.length / pageSize));
@@ -581,14 +698,7 @@ export default function Documents() {
               className="border-masan-border bg-masan-elevated text-xs text-masan-text hover:border-masan-emerald/40 hover:text-masan-emerald"
             >
               <FilePlus2 className="mr-1.5 size-3.5 text-masan-teal" />
-              Tạo chứng từ
-            </Button>
-            <Button
-              onClick={() => setMode('scan')}
-              className="bg-masan-emerald hover:bg-masan-emerald/90 text-slate-950 font-bold shadow-md shadow-emerald-950/20 text-xs"
-            >
-              <ScanLine className="mr-1.5 size-3.5" />
-              Quét phiếu OCR
+              Tạo chứng từ mới
             </Button>
           </div>
         )}

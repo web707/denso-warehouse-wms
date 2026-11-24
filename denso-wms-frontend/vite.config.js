@@ -8,13 +8,13 @@ export default defineConfig(({ mode }) => ({
   server: {
     port: 4310,
     proxy: {
-      '/api': { target: 'http://127.0.0.1:5089', changeOrigin: true },
+      '/api': { target: 'http://127.0.0.1:5001', changeOrigin: true },
     },
   },
   preview: {
     port: 4380,
     proxy: {
-      '/api': { target: 'http://127.0.0.1:5089', changeOrigin: true },
+      '/api': { target: 'http://127.0.0.1:5001', changeOrigin: true },
     },
   },
 }));

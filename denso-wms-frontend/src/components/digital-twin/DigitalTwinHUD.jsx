@@ -77,7 +77,7 @@ export default function DigitalTwinHUD({
         <div className="flex items-center gap-2 text-xs font-mono">
           <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#111E30] border border-[#26374C] text-[#38BDF8]">
             <CheckCircle2 className="w-3.5 h-3.5 text-[#10B981]" />
-            CSDL: PostgreSQL (Cổng 55434) · {lastSyncTime ? `Cập nhật: ${lastSyncTime}` : 'Đồng bộ tức thời'}
+            Hệ thống WMS Máy chủ Trung tâm · Đồng bộ thời gian thực · {lastSyncTime ? `Cập nhật: ${lastSyncTime}` : 'Đồng bộ tức thời'}
           </span>
           <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-amber-950/40 border border-amber-600/40 text-amber-300 text-[11px]">
             ⚠️ Mô phỏng tuyến nội bộ · Không đọc GPS phần cứng

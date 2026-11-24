@@ -150,7 +150,7 @@ export default function OrderDetail() {
           </div>
           <p className="text-xs text-masan-muted mt-1">
             {order.division || 'Kho gốc'} → {order.destination || 'DC-HN-01'} ·{' '}
-            <span className="font-mono text-masan-text">{orderParts.length}</span> PARTs ·{' '}
+            <span className="font-mono text-masan-text">{orderParts.length}</span> SKU ·{' '}
             <span className="font-mono text-masan-text">{fmtNum(totalCartons)}</span> thùng ·{' '}
             <span className="font-mono text-masan-text">{fmtDec(totalCbm, 2)}</span> m³ ·{' '}
             <span className="font-mono text-masan-text">{fmtNum(totalWeight)}</span> kg
@@ -205,7 +205,7 @@ export default function OrderDetail() {
         <div className="relative max-w-sm flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-masan-muted" />
           <Input
-            placeholder="Tìm PART, mã hàng, Master PO..."
+            placeholder="Tìm SKU, tên sản phẩm, số lô, Master PO..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 bg-masan-surface border-masan-border text-masan-text text-xs focus:border-masan-emerald"
@@ -222,7 +222,7 @@ export default function OrderDetail() {
           <table className="w-full text-xs text-left">
             <thead className="sticky top-0 bg-masan-elevated text-[11px] font-semibold text-masan-muted uppercase tracking-wider border-b border-masan-border z-10">
               <tr>
-                <th className="px-4 py-3 whitespace-nowrap">PART / Tên sản phẩm</th>
+                <th className="px-4 py-3 whitespace-nowrap">SKU / Tên sản phẩm</th>
                 <th className="px-4 py-3 whitespace-nowrap">Item Number</th>
                 <th className="px-4 py-3 whitespace-nowrap">Lô & QC</th>
                 <th className="px-4 py-3 whitespace-nowrap">Division</th>
@@ -320,7 +320,7 @@ export default function OrderDetail() {
                           <Pencil className="w-3.5 h-3.5 mr-2 text-masan-teal" /> Sửa thông tin
                         </DropdownMenuItem>
                         <DropdownMenuItem className="text-rose-400 focus:bg-rose-500/10 focus:text-rose-300" onClick={() => deletePart(p.id)}>
-                          <Trash2 className="w-3.5 h-3.5 mr-2" /> Xóa PART
+                          <Trash2 className="w-3.5 h-3.5 mr-2" /> Xóa SKU
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>

@@ -48,6 +48,12 @@ export class AddReceivingReceiptsAndQuarantine1788700000000 implements Migration
       DECLARE type_id uuid;
       BEGIN
         SELECT id INTO type_id FROM container_types LIMIT 1;
+        IF type_id IS NULL THEN
+          INSERT INTO container_types (code, label, internal_length_mm, internal_width_mm, internal_height_mm, max_cbm, max_payload_kg)
+          VALUES ('RACK20-A', 'Kệ công nghiệp 20 ô - Khu A', 6500, 900, 3000, 17.550, 10000.00)
+          RETURNING id INTO type_id;
+        END IF;
+
         IF NOT EXISTS (SELECT 1 FROM containers WHERE name = 'R-QUARANTINE') THEN
           INSERT INTO containers (name, warehouse_code, zone_code, container_type_id, product_family)
           VALUES ('R-QUARANTINE', 'DENSO-WH', 'ZONE-Q', type_id, 'quarantine');

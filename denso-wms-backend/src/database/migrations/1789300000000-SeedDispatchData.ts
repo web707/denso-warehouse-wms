@@ -10,10 +10,20 @@ export class SeedDispatchData1789300000000 implements MigrationInterface {
     let containers = await q.query("SELECT id FROM containers WHERE warehouse_code = 'DENSO-WH' LIMIT 1;");
     let containerId = containers?.[0]?.id;
     if (!containerId) {
+      let types = await q.query("SELECT id FROM container_types LIMIT 1;");
+      let typeId = types?.[0]?.id;
+      if (!typeId) {
+        const newTypes = await q.query(`
+          INSERT INTO container_types (code, label, internal_length_mm, internal_width_mm, internal_height_mm, max_cbm, max_payload_kg)
+          VALUES ('RACK20-A', 'Kệ công nghiệp 20 ô - Khu A', 6500, 900, 3000, 17.550, 10000.00)
+          RETURNING id;
+        `);
+        typeId = newTypes[0].id;
+      }
       containerId = 'b530a998-a483-46ef-9988-e52db3d46eaa';
       await q.query(`
-        INSERT INTO containers (id, name, warehouse_code, zone_code, created_at, updated_at)
-        VALUES ('${containerId}', 'R01', 'DENSO-WH', 'ZONE-A', now(), now())
+        INSERT INTO containers (id, name, warehouse_code, zone_code, container_type_id, created_at, updated_at)
+        VALUES ('${containerId}', 'R01', 'DENSO-WH', 'ZONE-A', '${typeId}', now(), now())
         ON CONFLICT (id) DO NOTHING;
       `);
     }
@@ -29,15 +39,48 @@ export class SeedDispatchData1789300000000 implements MigrationInterface {
     const parts = await q.query("SELECT id FROM parts WHERE product_code = 'DQA-NAMNGU-VANG' LIMIT 1;");
     let partId = parts?.[0]?.id;
     if (!partId) {
+      let orders = await q.query("SELECT id FROM orders LIMIT 1;");
+      let orderId = orders?.[0]?.id;
+      if (!orderId) {
+        orderId = 'a1111111-1111-1111-1111-111111111111';
+        await q.query(`
+          INSERT INTO orders (id, name, order_number, division, destination)
+          VALUES ('${orderId}', 'ORD-SEED-01', 'ORD-SEED-01', 'FMCG', 'DOMESTIC')
+          ON CONFLICT (id) DO NOTHING;
+        `);
+      }
+
+      let divisions = await q.query("SELECT id FROM divisions LIMIT 1;");
+      let divisionId = divisions?.[0]?.id;
+      if (!divisionId) {
+        divisionId = 'b2222222-2222-2222-2222-222222222222';
+        await q.query(`
+          INSERT INTO divisions (id, code, name, sort_order)
+          VALUES ('${divisionId}', 'DIV-A', 'Division A', 1)
+          ON CONFLICT (id) DO NOTHING;
+        `);
+      }
+
+      let dcPrefixes = await q.query("SELECT id FROM dc_prefixes LIMIT 1;");
+      let dcPrefixId = dcPrefixes?.[0]?.id;
+      if (!dcPrefixId) {
+        dcPrefixId = 'c3333333-3333-3333-3333-333333333333';
+        await q.query(`
+          INSERT INTO dc_prefixes (id, division_id, code, sort_order)
+          VALUES ('${dcPrefixId}', '${divisionId}', 'AA', 1)
+          ON CONFLICT (id) DO NOTHING;
+        `);
+      }
+
       partId = '77d10455-188b-4fcc-a43a-5027ace54885';
       await q.query(`
         INSERT INTO parts (
-          id, part_name, product_code, master_po, quantity_pcs, total_weight_kg,
+          id, order_id, division_id, dc_prefix_id, part_name, product_code, master_po, quantity_pcs, total_weight_kg,
           carton_count, carton_length_mm, carton_width_mm, carton_height_mm, cbm,
           container_id, color_hex, preferred_rack_slot, lot_number, uom_code,
           expiration_date, storage_class, product_family, lot_id, receiving_damaged, created_at, updated_at
         ) VALUES (
-          '${partId}', 'Nước mắm Nam Ngư Đệ Nhị Nhãn Vàng', 'DQA-NAMNGU-VANG', 'PO-MASAN-2026-01', 100, 20.00,
+          '${partId}', '${orderId}', '${divisionId}', '${dcPrefixId}', 'Nước mắm Nam Ngư Đệ Nhị Nhãn Vàng', 'DQA-NAMNGU-VANG', 'PO-MASAN-2026-01', 100, 20.00,
           10, 230, 160, 140, 0.051520,
           '${containerId}', '#ec4899', 6, 'DQA-NAMNGU-VANG-L2', 'EA',
           '2027-11-20', 'condiments', 'condiments', '96b45964-04da-4e1d-bbf4-7427d92c8208', false, now(), now()

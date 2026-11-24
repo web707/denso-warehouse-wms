@@ -37,13 +37,13 @@ export default function Orders() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-masan-border pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-masan-text">Lô hàng & Danh mục PARTs</h1>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-masan-text">Lô hàng & Danh mục SKU</h1>
             <span className="rounded-full bg-masan-emerald/10 border border-masan-emerald/20 px-2.5 py-0.5 text-[11px] font-semibold text-masan-emerald">
               Lot Master & Allocation
             </span>
           </div>
           <p className="text-sm text-masan-muted mt-1 max-w-3xl">
-            Quản trị các lô sản phẩm FMCG, quy cách đóng gói, theo dõi số lượng PARTs và điều phối phân bổ kệ lưu kho.
+            Quản trị các lô sản phẩm FMCG, quy cách đóng gói, theo dõi số lượng SKU và điều phối phân bổ kệ lưu kho.
           </p>
         </div>
 
@@ -119,7 +119,7 @@ export default function Orders() {
 
                 <div className="mt-4 pt-3 border-t border-masan-border/60 grid grid-cols-3 gap-2 text-center text-xs">
                   <div className="bg-masan-elevated/50 p-1.5 rounded-lg border border-masan-border/40">
-                    <div className="text-[10px] text-masan-muted font-sans">PARTs</div>
+                    <div className="text-[10px] text-masan-muted font-sans">Mã SKU</div>
                     <div className="font-mono font-bold text-masan-text">{count}</div>
                   </div>
                   <div className="bg-masan-elevated/50 p-1.5 rounded-lg border border-masan-border/40">
@@ -195,7 +195,7 @@ export default function Orders() {
               />
             </div>
             <p className="text-[11px] text-masan-muted">
-              Lô hàng sẽ được tạo trống. Bạn có thể thêm từng PART thủ công hoặc tải file Excel danh mục tại trang chi tiết.
+              Lô hàng sẽ được tạo trống. Bạn có thể thêm từng SKU thủ công hoặc tải file Excel danh mục tại trang chi tiết.
             </p>
             <DialogFooter className="gap-2 pt-2 border-t border-masan-border">
               <Button

@@ -130,8 +130,8 @@ export default function Login() {
                 MÔ HÌNH KHÔNG GIAN KHO SỐ HÓA
               </span>
               <span className="flex items-center gap-2 text-[11px] text-[#94A3B8]">
-                <span className="inline-block w-2 h-2 rounded-full bg-[#10B981] animate-ping" />
-                ZONE-A · GIÁM SÁT SỨC CHỨA THỰC ĐỊA
+                <span className="inline-block w-2 h-2 rounded-full bg-[#10B981]" />
+                MÔ PHỎNG KHÔNG GIAN KHO SỐ HÓA · DIGITAL TWIN PREVIEW
               </span>
             </div>
 
@@ -208,7 +208,7 @@ export default function Login() {
           </div>
 
           {/* Form */}
-          <form onSubmit={submit} className="space-y-4">
+          <form onSubmit={submit} className="space-y-4" autoComplete="off">
             {/* Username / Email Input (Height 50px, High Contrast) */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
@@ -223,7 +223,7 @@ export default function Login() {
                 </span>
                 <input
                   id="login-username"
-                  autoComplete="username"
+                  autoComplete="off"
                   required
                   name="username"
                   value={username}
@@ -248,7 +248,7 @@ export default function Login() {
                 </span>
                 <input
                   id="login-password"
-                  autoComplete="current-password"
+                  autoComplete="new-password"
                   required
                   name="password"
                   type={showPassword ? 'text' : 'password'}

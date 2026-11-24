@@ -154,7 +154,7 @@ export default function PartDialog({ open, onOpenChange, part, defaultOrderId, s
     }
     onOpenChange(false);
     } catch (err) {
-      setSubmitError(err?.message || 'Không thể lưu PART');
+      setSubmitError(err?.message || 'Không thể lưu sản phẩm');
     } finally {
       setSubmitting(false);
     }
@@ -164,7 +164,7 @@ export default function PartDialog({ open, onOpenChange, part, defaultOrderId, s
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{part ? 'Sửa thông tin hàng' : 'Thêm sản phẩm vào kho (PART/SKU)'}</DialogTitle>
+          <DialogTitle>{part ? 'Sửa thông tin hàng' : 'Thêm sản phẩm vào kho (SKU)'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
           {!part && (
@@ -204,7 +204,7 @@ export default function PartDialog({ open, onOpenChange, part, defaultOrderId, s
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Tên sản phẩm / PART</Label>
+              <Label>Tên sản phẩm / SKU</Label>
               <Input className={invalidClass('partName')} value={form.partName} onChange={(e) => setForm((f) => ({ ...f, partName: e.target.value }))} placeholder="VD: Kokomi Đại 90g" required />{err('partName')}
             </div>
             <div className="space-y-1.5">

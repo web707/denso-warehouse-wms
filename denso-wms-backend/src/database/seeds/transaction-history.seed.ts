@@ -17,16 +17,16 @@ export interface SeedTransactionOptions {
 }
 
 const SAMPLE_DENSO_PARTS = [
-  { name: 'DENSO Spark Plug Iridium IK20', code: 'IK20-SK16' },
-  { name: 'DENSO Common Rail Injector 23670', code: 'CR-INJ-23670' },
-  { name: 'DENSO Alternator 12V 100A', code: 'ALT-100A-J01' },
-  { name: 'DENSO Oxygen Sensor DOX-0109', code: 'O2-DOX0109' },
-  { name: 'DENSO Radiator Core Aluminum 42mm', code: 'RAD-AL42-D' },
-  { name: 'DENSO AC Compressor 10S17C', code: 'COMP-10S17C' },
-  { name: 'DENSO Starter Motor 1.4kW 12V', code: 'STARTER-14K' },
-  { name: 'DENSO Mass Air Flow Sensor MAF-3', code: 'MAF-33010' },
-  { name: 'DENSO Engine Oil Filter DL-02', code: 'FLT-DL02-P' },
-  { name: 'DENSO Cabin Air Cleaner DC-001', code: 'AIR-DC001' },
+  { name: 'Nước mắm Nam Ngư Đệ Nhị Nhãn Vàng', code: 'MSN-NAMNGU-VANG' },
+  { name: 'Mì Omachi Sườn Hầm Ngũ Quả', code: 'MSN-OMACHI-SUON' },
+  { name: 'Tương ớt CHIN-SU Chai 250g', code: 'MSN-CHINSU-CHILI' },
+  { name: 'Mì Kokomi Tôm Chua Cay 65g', code: 'MSN-KOKOMI-TOM' },
+  { name: 'Nước tương Tam Thái Tử Nhất Ca', code: 'MSN-TAMTHAITU-01' },
+  { name: 'Thịt mát MEATDeli Chuẩn Sạch', code: 'MSN-MEATDELI-PORK' },
+  { name: 'Cà phê hòa tan Wake-up 247', code: 'MSN-WAKEUP-247' },
+  { name: 'Nước khoáng thiên nhiên Vĩnh Hảo 500ml', code: 'MSN-VINHHAO-500' },
+  { name: 'Hạt nêm CHIN-SU Tôm Thịt 400g', code: 'MSN-CHINSU-NEM' },
+  { name: 'Nước rửa chén Homey Tinh Dầu Cam', code: 'MSN-HOMEY-ORANGE' },
 ];
 
 /**
